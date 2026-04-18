@@ -48,7 +48,7 @@ def run():
         if lines:
             os.environ["YT_REFRESH_TOKEN"] = lines[0]
             os.environ["YT_CLIENT_ID"] = "764743703979-nif776k7898jfb9q6iqeojng9afbj76e.apps.googleusercontent.com"
-            os.environ["YT_CLIENT_SECRET"] = "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"
+            os.environ["YT_CLIENT_SECRET"] = "YOUR_CLIENT_SECRET"
         log.info("Uploading to YouTube...")
         title = f"{topic.title()} #Shorts"
         description = f"Did you know? {script}\n\n#Shorts #Facts #LearnSomethingNew #Education"
