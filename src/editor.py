@@ -35,16 +35,14 @@ WIDTH, HEIGHT   = 720, 1280
 FPS             = 30
 
 # ── Caption style ─────────────────────────────────────────────────────────────
-FONT_SIZE       = 68                  # was 100 — scaled for 720-wide frame
-LINE_HEIGHT     = FONT_SIZE + 10      # was FONT_SIZE+24; tighter line spacing
+FONT_SIZE       = 72                  # slightly larger — no box competing for space
+LINE_HEIGHT     = FONT_SIZE + 12      # tight but not cramped
 CAPTION_COLOR   = (255, 255, 255)
 HIGHLIGHT_COLOR = (255, 220,   0)
-SHADOW_COLOR    = (  0,   0,   0)
-SHADOW_OFFSET   = 4                   # scaled down proportionally
-BOX_PADDING_X   = 24                  # horizontal inner padding for caption box
-BOX_PADDING_Y   = 14                  # vertical inner padding for caption box
-WRAP_CHARS      = 18                  # wider wrap so 3–4 words fit per line
-WORDS_PER_CHUNK = 3                   # highlight this many words at once
+STROKE_COLOR    = (0,   0,   0)       # thick outline keeps text readable on any bg
+STROKE_WIDTH    = 5                   # px — replaces the dark box entirely
+WRAP_CHARS      = 14                  # tighter wrap → fewer words per line → bigger feel
+WORDS_PER_CHUNK = 3                   # show exactly this many words at a time
 # Vertical centre of the caption block (68 % down the frame)
 TEXT_Y_POSITION = int(HEIGHT * 0.68)
 
@@ -295,54 +293,21 @@ def _render_caption_frame(words: list[str], highlight_start: int,
     """
     Render a single caption frame.
 
-    - Shows a window of ~20 words centred on highlight_start.
-    - Highlights words [highlight_start : highlight_start + WORDS_PER_CHUNK].
-    - The semi-transparent background box is tightly fitted to the text — it
-      does NOT span the full width, preventing coins from being obscured.
+    - Shows ONLY the current WORDS_PER_CHUNK words (no surrounding context).
+    - First word of the chunk is yellow (highlight), rest are white.
+    - NO background box — text sits directly over the video footage.
+    - Thick black stroke (STROKE_WIDTH) keeps text legible on any background.
     """
-    # ── Build the visible word window ──────────────────────────────────────
-    win_start   = max(0, highlight_start - 6)
-    win_end     = min(len(words), highlight_start + 14)
-    visible     = words[win_start:win_end]
-    hi_lo       = highlight_start - win_start          # first highlighted idx in visible
-    hi_hi       = hi_lo + WORDS_PER_CHUNK              # one-past-last highlighted idx
+    # ── Only show the current chunk ────────────────────────────────────────
+    chunk = words[highlight_start : highlight_start + WORDS_PER_CHUNK]
+    if not chunk:
+        return Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
 
-    wrapped = textwrap.wrap(" ".join(visible), width=WRAP_CHARS)
+    wrapped = textwrap.wrap(" ".join(chunk), width=WRAP_CHARS)
     if not wrapped:
         return Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
 
-    # ── Measure total text block dimensions ───────────────────────────────
-    # Use a throw-away draw to measure
-    probe     = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    max_w     = max(int(probe.textlength(line, font=font)) for line in wrapped)
-    total_h   = len(wrapped) * LINE_HEIGHT
-
-    # ── Position: centred horizontally, TEXT_Y_POSITION vertically ────────
-    box_x1 = (WIDTH - max_w) // 2 - BOX_PADDING_X
-    box_x2 = (WIDTH + max_w) // 2 + BOX_PADDING_X
-    box_y1 = TEXT_Y_POSITION - BOX_PADDING_Y
-    box_y2 = TEXT_Y_POSITION + total_h + BOX_PADDING_Y
-
-    # Clamp to frame bounds
-    box_x1 = max(0, box_x1)
-    box_x2 = min(WIDTH, box_x2)
-    box_y1 = max(0, box_y1)
-    box_y2 = min(HEIGHT, box_y2)
-
-    # ── Compositing: transparent base → overlay box → text ────────────────
-    base    = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    ov_draw = ImageDraw.Draw(overlay)
-    # Rounded semi-transparent box (no full-width dark strip)
-    ov_draw.rounded_rectangle(
-        [(box_x1, box_y1), (box_x2, box_y2)],
-        radius=12,
-        fill=(0, 0, 0, 175),
-    )
-    base = Image.alpha_composite(base, overlay)
-    draw = ImageDraw.Draw(base)
-
-    # ── Build word→(line, word-in-line) lookup (O(1) per word) ────────────
+    # ── Build word→global-index lookup (O(1)) ─────────────────────────────
     pos_map: dict[tuple[int, int], int] = {}
     global_idx = 0
     for li, line in enumerate(wrapped):
@@ -350,7 +315,11 @@ def _render_caption_frame(words: list[str], highlight_start: int,
             pos_map[(li, wi)] = global_idx
             global_idx += 1
 
-    # ── Draw each word ─────────────────────────────────────────────────────
+    # ── Transparent canvas — NO box drawn ─────────────────────────────────
+    base = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(base)
+
+    # ── Draw each word with thick stroke then fill ─────────────────────────
     for li, line in enumerate(wrapped):
         line_words = line.split()
         line_w     = sum(int(draw.textlength(w + " ", font=font)) for w in line_words)
@@ -359,14 +328,17 @@ def _render_caption_frame(words: list[str], highlight_start: int,
 
         for wi, word in enumerate(line_words):
             g_idx = pos_map.get((li, wi), -1)
-            color = HIGHLIGHT_COLOR if hi_lo <= g_idx < hi_hi else CAPTION_COLOR
+            # First word of chunk is highlighted yellow; rest are white
+            color = HIGHLIGHT_COLOR if g_idx == 0 else CAPTION_COLOR
 
-            # Shadow
-            draw.text(
-                (x + SHADOW_OFFSET, yy + SHADOW_OFFSET),
-                word, font=font, fill=(*SHADOW_COLOR, 200),
-            )
-            # Main text
+            # Stroke: draw the word offset in 8 directions for a clean outline
+            for dx in range(-STROKE_WIDTH, STROKE_WIDTH + 1):
+                for dy in range(-STROKE_WIDTH, STROKE_WIDTH + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    draw.text((x + dx, yy + dy), word, font=font,
+                              fill=(*STROKE_COLOR, 255))
+            # Fill on top
             draw.text((x, yy), word, font=font, fill=color)
             x += int(draw.textlength(word + " ", font=font))
 
