@@ -1,0 +1,38 @@
+name: Daily YouTube Shorts Post
+
+on:
+  schedule:
+    - cron: "0 9 * * *"   # 9:00 AM UTC
+    - cron: "0 21 * * *"  # 9:00 PM UTC
+  workflow_dispatch:       # Allow manual trigger from GitHub UI
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies (ImageMagick for MoviePy)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick ffmpeg
+          # Allow ImageMagick to read/write files (needed by MoviePy)
+          sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}   # or leave blank if using g4f
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+        run: python main.py
