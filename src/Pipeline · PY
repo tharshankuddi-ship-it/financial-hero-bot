@@ -1,0 +1,446 @@
+"""
+pipeline.py - Financial Hero: End-to-End Short Video Pipeline
+=============================================================
+
+Single command to go from a topic to a finished YouTube Short + thumbnail.
+
+Usage
+-----
+    # Quickest — just a topic, everything auto-generated:
+    python pipeline.py --topic "Why the rich get richer"
+
+    # Full control:
+    python pipeline.py \\
+        --topic   "Why the rich get richer" \\
+        --script  "Your custom script here..." \\
+        --voice   en-us          \\  # espeak-ng voice (offline, free)
+        --speed   148            \\  # words per minute
+        --style   split          \\  # thumbnail style: split | dramatic | youtube
+        --seed    42             \\  # thumbnail image seed
+        --out     output/        \\  # output directory
+        --api-key sk-ant-...        # Anthropic key for AI script (optional)
+
+TTS options (all free):
+    espeak-ng  — offline, built-in, robotic but reliable  (default, no key needed)
+    gtts       — Google TTS, natural voice               (needs internet)
+    elevenlabs — best quality                            (needs free API key)
+
+Script generation:
+    With  --api-key  → Claude generates a viral finance script
+    Without          → built-in template scripts are used
+"""
+
+import argparse, logging, os, re, subprocess, sys, tempfile, textwrap, time
+from pathlib import Path
+
+log = logging.getLogger("pipeline")
+
+# ── Built-in script templates (used when no API key / offline) ────────────────
+SCRIPT_TEMPLATES = {
+    "wealth gap": (
+        "The wealth gap is growing every single year. "
+        "The top one percent now owns more than the bottom fifty percent combined. "
+        "But here is the secret they never teach you in school. "
+        "The rich do not work for money. Money works for them. "
+        "They buy assets. Stocks. Real estate. Businesses. "
+        "These assets generate income while they sleep. "
+        "The poor trade time for money their entire lives. "
+        "The wealthy buy back their time with passive income. "
+        "Start investing today. Even ten dollars a month compounds into thousands. "
+        "Your future self will thank you."
+    ),
+    "inflation": (
+        "Inflation is silently stealing seven percent of your savings every year. "
+        "The money sitting in your bank account is losing value right now. "
+        "But the rich know something most people do not. "
+        "They invest in assets that grow faster than inflation. "
+        "Real estate. Index funds. Gold. Bitcoin. "
+        "Cash is a melting ice cube. Assets are a growing snowball. "
+        "The longer you wait, the more you lose. "
+        "Start protecting your wealth today."
+    ),
+    "default": (
+        "Most people work forty years and retire broke. "
+        "The system was never designed to make you rich. "
+        "It was designed to keep you spending. "
+        "The wealthy think differently about money. "
+        "They pay themselves first. "
+        "They invest before they spend. "
+        "They build multiple income streams. "
+        "One job is one step away from zero income. "
+        "Start building your financial freedom today. "
+        "The best time to invest was yesterday. The second best time is right now."
+    ),
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Script generation
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generate_script(topic: str, api_key: str | None = None) -> str:
+    """
+    Generate a short-form finance script for the given topic.
+
+    With api_key  → calls Claude claude-haiku-4-5-20251001 (fast + cheap)
+    Without       → picks the closest built-in template
+    """
+    if api_key:
+        return _claude_script(topic, api_key)
+    return _template_script(topic)
+
+
+def _claude_script(topic: str, api_key: str) -> str:
+    """Generate script via Anthropic API (claude-haiku-4-5-20251001 — fastest/cheapest)."""
+    import urllib.request, json
+    prompt = textwrap.dedent(f"""
+        Write a punchy 60-second YouTube Shorts script about: "{topic}"
+
+        Rules:
+        - Finance / wealth mindset theme
+        - 80-100 words total (read in ~45-60 seconds)
+        - No headers, no bullet points — plain flowing sentences only
+        - Hook in the first 5 words that stops the scroll
+        - End with a strong call-to-action (follow, invest, start today)
+        - Do NOT use hashtags, emojis, or stage directions
+        - Write as if speaking directly to a 25-year-old who wants to be rich
+
+        Output ONLY the script text. Nothing else.
+    """).strip()
+
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 300,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+            script = data["content"][0]["text"].strip()
+            log.info(f"Claude script generated ({len(script.split())} words)")
+            return script
+    except Exception as e:
+        log.warning(f"Claude API failed ({e}) — falling back to template")
+        return _template_script(topic)
+
+
+def _template_script(topic: str) -> str:
+    """Pick the closest built-in template by keyword matching."""
+    topic_lower = topic.lower()
+    for key, script in SCRIPT_TEMPLATES.items():
+        if key != "default" and key in topic_lower:
+            log.info(f"Using template: {key!r}")
+            return script
+    log.info("Using default template script")
+    return SCRIPT_TEMPLATES["default"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TTS audio generation
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generate_audio(
+    script: str,
+    output_path: str,
+    engine: str = "espeak",
+    voice: str = "en-us",
+    speed: int = 148,
+    elevenlabs_key: str | None = None,
+) -> str:
+    """
+    Convert script to speech audio.
+
+    Engines (all free):
+        espeak    — offline, no internet needed   (default)
+        gtts      — Google TTS natural voice      (needs internet)
+        elevenlabs— best quality, free tier       (needs free API key)
+
+    Returns output_path.
+    """
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+    if engine == "elevenlabs" and elevenlabs_key:
+        return _elevenlabs_tts(script, output_path, elevenlabs_key)
+    elif engine == "gtts":
+        return _gtts_tts(script, output_path)
+    else:
+        return _espeak_tts(script, output_path, voice=voice, speed=speed)
+
+
+def _espeak_tts(script: str, output_path: str, voice: str = "en-us", speed: int = 148) -> str:
+    """
+    Offline TTS via espeak-ng.
+    speed: words per minute (145-175 sounds natural for finance content)
+    voice options: en-us, en-gb, en+m3, en+f3 (male/female variants)
+    """
+    # Write script to temp file to avoid shell-escaping issues
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        f.write(script)
+        txt_path = f.name
+
+    wav_path = output_path.replace(".mp3", ".wav")
+    try:
+        result = subprocess.run(
+            ["espeak-ng", "-v", voice, "-s", str(speed), "-p", "40",
+             "-f", txt_path, "-w", wav_path],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"espeak-ng error: {result.stderr}")
+
+        # Convert WAV → MP3 (smaller, compatible with MoviePy)
+        ffmpeg_result = subprocess.run(
+            ["ffmpeg", "-i", wav_path, "-q:a", "2", output_path, "-y"],
+            capture_output=True, timeout=30,
+        )
+        if ffmpeg_result.returncode != 0:
+            raise RuntimeError("ffmpeg wav→mp3 conversion failed")
+
+        duration = _get_audio_duration(output_path)
+        log.info(f"espeak-ng audio: {duration:.1f}s → {output_path}")
+        return output_path
+    finally:
+        for p in (txt_path, wav_path):
+            try: os.unlink(p)
+            except OSError: pass
+
+
+def _gtts_tts(script: str, output_path: str) -> str:
+    """Google TTS — natural voice, requires internet."""
+    try:
+        from gtts import gTTS
+        gTTS(script, lang="en", slow=False).save(output_path)
+        duration = _get_audio_duration(output_path)
+        log.info(f"gTTS audio: {duration:.1f}s → {output_path}")
+        return output_path
+    except ImportError:
+        log.warning("gTTS not installed (pip install gtts) — falling back to espeak")
+        return _espeak_tts(script, output_path)
+    except Exception as e:
+        log.warning(f"gTTS failed ({e}) — falling back to espeak")
+        return _espeak_tts(script, output_path)
+
+
+def _elevenlabs_tts(script: str, output_path: str, api_key: str) -> str:
+    """
+    ElevenLabs TTS — best quality, free tier (10k chars/month).
+    Voice: Adam (professional male narrator, good for finance content).
+    """
+    import urllib.request, json
+    VOICE_ID = "pNInz6obpgDQGcFmaJgB"  # Adam — deep, authoritative
+    url      = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+    payload  = json.dumps({
+        "text": script,
+        "model_id": "eleven_monolingual_v1",
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "xi-api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            with open(output_path, "wb") as f:
+                f.write(resp.read())
+        duration = _get_audio_duration(output_path)
+        log.info(f"ElevenLabs audio: {duration:.1f}s → {output_path}")
+        return output_path
+    except Exception as e:
+        log.warning(f"ElevenLabs failed ({e}) — falling back to espeak")
+        return _espeak_tts(script, output_path)
+
+
+def _get_audio_duration(path: str) -> float:
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Full pipeline
+# ══════════════════════════════════════════════════════════════════════════════
+
+def run(
+    topic: str,
+    script: str | None       = None,
+    out_dir: str             = "output",
+    voice: str               = "en-us",
+    speed: int               = 148,
+    tts_engine: str          = "espeak",
+    thumb_style: str         = "split",
+    thumb_seed: int          = 42,
+    font_path: str | None    = None,
+    api_key: str | None      = None,
+    elevenlabs_key: str | None = None,
+) -> dict[str, str]:
+    """
+    Run the full pipeline: topic → script → audio → video + thumbnail.
+
+    Returns a dict with keys: script, audio, video, thumbnail.
+    """
+    t0 = time.time()
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Sanitise topic for use in filenames
+    slug = re.sub(r"[^a-z0-9]+", "_", topic.lower()).strip("_")[:40]
+
+    paths = {
+        "script":    os.path.join(out_dir, f"{slug}_script.txt"),
+        "audio":     os.path.join(out_dir, f"{slug}_audio.mp3"),
+        "video":     os.path.join(out_dir, f"{slug}_video.mp4"),
+        "thumbnail": os.path.join(out_dir, f"{slug}_thumbnail.png"),
+    }
+
+    # ── 1. Script ─────────────────────────────────────────────────────────────
+    log.info("━━ Step 1/4: Script")
+    if not script:
+        script = generate_script(topic, api_key)
+    with open(paths["script"], "w") as f:
+        f.write(script)
+    word_count = len(script.split())
+    log.info(f"   {word_count} words → {paths['script']}")
+
+    # ── 2. Audio ──────────────────────────────────────────────────────────────
+    log.info("━━ Step 2/4: Audio TTS")
+    generate_audio(
+        script, paths["audio"],
+        engine=tts_engine, voice=voice, speed=speed,
+        elevenlabs_key=elevenlabs_key,
+    )
+    duration = _get_audio_duration(paths["audio"])
+    log.info(f"   {duration:.1f}s audio → {paths['audio']}")
+
+    # ── 3. Video ──────────────────────────────────────────────────────────────
+    log.info("━━ Step 3/4: Video render")
+    # Import here so editor.py can live alongside pipeline.py
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from editor import render_video
+    render_video(
+        script=script,
+        audio_path=paths["audio"],
+        output_path=paths["video"],
+        font_path=font_path,
+    )
+    video_size_mb = os.path.getsize(paths["video"]) / 1024 / 1024
+    log.info(f"   {video_size_mb:.1f} MB → {paths['video']}")
+
+    # ── 4. Thumbnail ──────────────────────────────────────────────────────────
+    log.info("━━ Step 4/4: Thumbnail")
+    from editor import generate_thumbnail
+    generate_thumbnail(
+        title=topic,
+        output_path=paths["thumbnail"],
+        style=thumb_style,
+        seed=thumb_seed,
+    )
+    log.info(f"   → {paths['thumbnail']}")
+
+    elapsed = time.time() - t0
+    log.info(f"━━ Done in {elapsed:.1f}s")
+    _print_summary(topic, paths, duration, video_size_mb, elapsed)
+    return paths
+
+
+def _print_summary(topic, paths, duration, video_mb, elapsed):
+    print("\n" + "═" * 54)
+    print(f"  ✅  Financial Hero Pipeline Complete")
+    print("═" * 54)
+    print(f"  Topic     : {topic}")
+    print(f"  Duration  : {duration:.1f}s")
+    print(f"  Video     : {video_mb:.1f} MB")
+    print(f"  Time taken: {elapsed:.1f}s")
+    print("─" * 54)
+    for label, path in [
+        ("📝 Script   ", paths["script"]),
+        ("🔊 Audio    ", paths["audio"]),
+        ("🎬 Video    ", paths["video"]),
+        ("🖼  Thumbnail", paths["thumbnail"]),
+    ]:
+        print(f"  {label}: {path}")
+    print("═" * 54 + "\n")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CLI entry point
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Financial Hero — YouTube Shorts Pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""
+            Examples:
+              # Fastest (offline, no keys needed):
+              python pipeline.py --topic "Why the rich get richer"
+
+              # With AI script generation:
+              python pipeline.py --topic "Inflation explained" --api-key sk-ant-...
+
+              # With best quality voice (ElevenLabs free tier):
+              python pipeline.py --topic "Stock market basics" --tts elevenlabs --el-key YOUR_KEY
+
+              # Custom output directory:
+              python pipeline.py --topic "Crypto wealth" --out /tmp/videos/
+        """),
+    )
+    parser.add_argument("--topic",   required=True,         help="Video topic / title")
+    parser.add_argument("--script",  default=None,          help="Custom script (skip generation)")
+    parser.add_argument("--out",     default="output",      help="Output directory (default: output/)")
+    parser.add_argument("--voice",   default="en-us",       help="espeak-ng voice (default: en-us)")
+    parser.add_argument("--speed",   default=148, type=int, help="TTS speed WPM (default: 148)")
+    parser.add_argument("--tts",     default="espeak",
+                        choices=["espeak", "gtts", "elevenlabs"],
+                        help="TTS engine (default: espeak)")
+    parser.add_argument("--style",   default="split",
+                        choices=["split", "dramatic", "youtube"],
+                        help="Thumbnail style (default: split)")
+    parser.add_argument("--seed",    default=42, type=int,  help="Thumbnail image seed (default: 42)")
+    parser.add_argument("--font",    default=None,          help="Path to .ttf caption font")
+    parser.add_argument("--api-key", default=os.getenv("ANTHROPIC_API_KEY"),
+                        help="Anthropic API key for script gen (or set ANTHROPIC_API_KEY env var)")
+    parser.add_argument("--el-key",  default=os.getenv("ELEVENLABS_API_KEY"),
+                        help="ElevenLabs API key (or set ELEVENLABS_API_KEY env var)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show debug logs")
+
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s  %(levelname)-7s  %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    run(
+        topic          = args.topic,
+        script         = args.script,
+        out_dir        = args.out,
+        voice          = args.voice,
+        speed          = args.speed,
+        tts_engine     = args.tts,
+        thumb_style    = args.style,
+        thumb_seed     = args.seed,
+        font_path      = args.font,
+        api_key        = args.api_key,
+        elevenlabs_key = args.el_key,
+    )
+
+
+if __name__ == "__main__":
+    main()
