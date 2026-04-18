@@ -343,3 +343,237 @@ def _render_caption_frame(words: list[str], highlight_start: int,
             x += int(draw.textlength(word + " ", font=font))
 
     return base
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Thumbnail generation  (free — no API key required)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Thumbnail dimensions (16:9 YouTube standard)
+THUMB_W, THUMB_H = 1280, 720
+
+# Pollinations.ai — completely free, no signup, no key
+# Docs: https://pollinations.ai  |  model options: flux, turbo
+_POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}?width={w}&height={h}&nologo=true&model=flux&seed={seed}"
+
+def generate_thumbnail(
+    title: str,
+    output_path: str,
+    style: str = "youtube",
+    seed: int = 42,
+) -> str:
+    """
+    Generate a YouTube thumbnail using free AI image generation.
+
+    Tries sources in order:
+      1. Pollinations.ai  (free, no key)
+      2. CSS/PIL fallback (always works offline)
+
+    Args:
+        title:       Video title shown on the thumbnail.
+        output_path: Where to save the .png / .jpg file.
+        style:       One of "youtube", "split", "dramatic".
+        seed:        Fixed seed for reproducibility (change to get a new image).
+
+    Returns:
+        output_path on success.
+    """
+    prompt = _build_thumbnail_prompt(title, style)
+    log.info(f"Generating thumbnail: {prompt[:80]}...")
+
+    img = _pollinations_thumbnail(prompt, seed)
+    if img is None:
+        log.warning("Pollinations failed — using PIL fallback thumbnail")
+        img = _pil_fallback_thumbnail(title)
+
+    img = img.convert("RGB").resize((THUMB_W, THUMB_H), Image.LANCZOS)
+    img.save(output_path, quality=95)
+    log.info(f"Thumbnail saved -> {output_path}")
+    return output_path
+
+
+def _build_thumbnail_prompt(title: str, style: str) -> str:
+    """Build a detailed prompt tuned for YouTube thumbnail aesthetics."""
+    base_quality = (
+        "ultra realistic, 8k, cinematic lighting, sharp focus, "
+        "high saturation, dramatic shadows, professional photography, "
+        "YouTube thumbnail style, eye-catching, 16:9"
+    )
+    if style == "split":
+        return (
+            f"split screen YouTube thumbnail, left half: stressed poor man dark moody "
+            f"lighting holding empty wallet, desperate sad expression, dark red shadows, "
+            f"right half: confident wealthy businessman in luxury suit gold watch, "
+            f"money flying around, bright golden lighting, strong contrast between "
+            f"dark and bright sides, title concept '{title}', {base_quality}"
+        )
+    elif style == "dramatic":
+        return (
+            f"dramatic YouTube thumbnail about '{title}', "
+            f"person with shocked expression, gold coins and money raining, "
+            f"cinematic dark background with golden light rays, "
+            f"bold visual storytelling, {base_quality}"
+        )
+    else:  # youtube default
+        return (
+            f"YouTube thumbnail for video titled '{title}', "
+            f"split screen poor vs rich contrast, dark vs bright lighting, "
+            f"money and finance theme, emotional facial expressions, "
+            f"bold text space at top, {base_quality}"
+        )
+
+
+def _pollinations_thumbnail(prompt: str, seed: int) -> Image.Image | None:
+    """Call Pollinations.ai (free, no key needed)."""
+    try:
+        url = _POLLINATIONS_URL.format(
+            prompt=requests.utils.quote(prompt),
+            w=THUMB_W, h=THUMB_H, seed=seed,
+        )
+        resp = requests.get(url, timeout=60)
+        if resp.status_code != 200:
+            log.warning(f"Pollinations HTTP {resp.status_code}")
+            return None
+        img = Image.open(io.BytesIO(resp.content))
+        log.info("Pollinations.ai thumbnail generated")
+        return img
+    except Exception as e:
+        log.warning(f"Pollinations thumbnail failed: {e}")
+        return None
+
+
+def _pil_fallback_thumbnail(title: str) -> Image.Image:
+    """
+    Pure-PIL split-screen thumbnail — works with zero network access.
+    Left: dark red (poor), Right: dark gold/green (rich), VS divider, title text.
+    """
+    img  = Image.new("RGB", (THUMB_W, THUMB_H))
+    draw = ImageDraw.Draw(img)
+    half = THUMB_W // 2
+
+    # ── Backgrounds ──────────────────────────────────────────────────────────
+    # Left gradient: near-black → dark red
+    for x in range(half):
+        t = x / half
+        r = int(20 + t * 60)
+        draw.line([(x, 0), (x, THUMB_H)], fill=(r, 5, 5))
+
+    # Right gradient: dark green → gold-tinted
+    for x in range(half, THUMB_W):
+        t = (x - half) / half
+        g = int(30 + t * 80)
+        b = int(5  + t * 20)
+        draw.line([(x, 0), (x, THUMB_H)], fill=(int(20 + t*60), g, b))
+
+    # ── Poor figure (left) ───────────────────────────────────────────────────
+    cx_l = half // 2
+    # body
+    draw.ellipse([(cx_l-28, 310), (cx_l+28, 390)], fill=(28, 22, 22))
+    draw.rectangle([(cx_l-34, 385), (cx_l+34, 570)], fill=(22, 18, 18))
+    # head
+    draw.ellipse([(cx_l-42, 220), (cx_l+42, 315)], fill=(160, 100, 60))
+    # frown (180→360 draws the bottom arc = downturned mouth)
+    draw.arc([(cx_l-18, 274), (cx_l+18, 302)], start=180, end=360, fill=(60, 30, 10), width=3)
+    # arms drooping
+    draw.line([(cx_l-34, 400), (cx_l-80, 490)], fill=(22, 18, 18), width=22)
+    draw.line([(cx_l+34, 400), (cx_l+75, 490)], fill=(22, 18, 18), width=22)
+    # empty wallet
+    draw.rectangle([(cx_l+58, 468), (cx_l+100, 502)], fill=(60, 40, 20), outline=(30,15,5), width=2)
+    # sweat drop
+    draw.polygon([(cx_l-55, 258), (cx_l-50, 270), (cx_l-60, 270)], fill=(80, 140, 200))
+
+    # ── Rich figure (right) ──────────────────────────────────────────────────
+    cx_r = half + half // 2
+    # body / suit
+    draw.ellipse([(cx_r-30, 305), (cx_r+30, 385)], fill=(20, 38, 20))
+    draw.rectangle([(cx_r-38, 380), (cx_r+38, 570)], fill=(16, 30, 16))
+    # tie
+    draw.polygon([(cx_r-8,382),(cx_r+8,382),(cx_r+5,450),(cx_r,460),(cx_r-5,450)],
+                 fill=(180, 150, 0))
+    # head
+    draw.ellipse([(cx_r-44, 215), (cx_r+44, 310)], fill=(170, 110, 65))
+    # smile (0→180 draws top arc = upturned mouth)
+    draw.arc([(cx_r-20, 265), (cx_r+20, 295)], start=0, end=180, fill=(60, 30, 10), width=3)
+    # arms — hands on hips / raised
+    draw.line([(cx_r-38, 395), (cx_r-85, 480)], fill=(16, 30, 16), width=24)
+    draw.line([(cx_r+38, 395), (cx_r+85, 480)], fill=(16, 30, 16), width=24)
+    # floating money bills
+    for bx, by, angle in [(cx_r+95,120,-12),(cx_r+130,175,8),(cx_r+70,200,-5),(cx_r+155,130,15)]:
+        _draw_bill(draw, bx, by, angle)
+    # gold coin stack
+    for i in range(5):
+        draw.ellipse([(cx_r+110, 490-i*10), (cx_r+158, 504-i*10)],
+                     fill=(200, 160, 0), outline=(140, 100, 0), width=1)
+    # glow ring
+    for r_size in range(40, 0, -8):
+        alpha_fill = (255, 210, 50, max(0, 6 - r_size//8) * 10)
+        draw.ellipse([(cx_r-r_size*2, 555), (cx_r+r_size*2, 575)],
+                     fill=(min(255,30+r_size), min(255,50+r_size*2), 10))
+    # ── VS divider ───────────────────────────────────────────────────────────
+    for gx in range(half-3, half+4):
+        t = abs(gx - half) / 3
+        brightness = int(255 * (1 - t * 0.6))
+        draw.line([(gx, 0), (gx, THUMB_H)], fill=(brightness, int(brightness*0.85), 0))
+    # VS badge
+    vx, vy = half, THUMB_H // 2
+    draw.rectangle([(vx-28, vy-22), (vx+28, vy+22)], fill=(220, 180, 0))
+    draw.rectangle([(vx-26, vy-20), (vx+26, vy+20)], fill=(255, 215, 0))
+    _draw_outlined_text(draw, (vx, vy), "VS", size=30, fill=(0,0,0), stroke=(100,80,0), anchor="mm")
+
+    # ── Title text ────────────────────────────────────────────────────────────
+    words = title.upper().split()
+    mid   = len(words) // 2
+    line1 = " ".join(words[:mid])
+    line2 = " ".join(words[mid:])
+    _draw_outlined_text(draw, (THUMB_W//2, 42),  line1, size=60,
+                         fill=(255, 215, 0), stroke=(0,0,0), anchor="mm")
+    _draw_outlined_text(draw, (THUMB_W//2, 108), line2, size=60,
+                         fill=(255, 170, 0), stroke=(0,0,0), anchor="mm")
+
+    # ── Side labels (below title, above figures) ──────────────────────────────
+    _draw_outlined_text(draw, (cx_l, 158), "THE POOR", size=42,
+                         fill=(200, 30, 30), stroke=(0,0,0), anchor="mm")
+    _draw_outlined_text(draw, (cx_r, 158), "THE RICH", size=42,
+                         fill=(255, 210, 0), stroke=(0,0,0), anchor="mm")
+
+    # ── Top/bottom accent bars ────────────────────────────────────────────────
+    for y in range(8):
+        t = y / 8
+        draw.line([(0,y),(THUMB_W,y)], fill=(int(200-t*80), int(30+t*20), 0))
+        draw.line([(0,THUMB_H-1-y),(THUMB_W,THUMB_H-1-y)],
+                  fill=(0, int(150+t*80), int(30+t*20)))
+
+    # ── Bottom caption ────────────────────────────────────────────────────────
+    draw.rectangle([(0, THUMB_H-52), (THUMB_W, THUMB_H)], fill=(0,0,0))
+    _draw_outlined_text(draw, (THUMB_W//2, THUMB_H-26),
+                         "THE SECRET THEY DON'T WANT YOU TO KNOW",
+                         size=28, fill=(255,255,255), stroke=(80,80,80), anchor="mm")
+
+    return img
+
+
+def _draw_outlined_text(draw, xy, text, size=48, fill=(255,255,255),
+                         stroke=(0,0,0), anchor="mm"):
+    """Draw text with a solid outline, using best available font."""
+    font = _load_font(None, size)
+    sw   = max(1, size // 16)   # stroke width scales with font size
+    x, y = xy
+    # Draw stroke offsets
+    for dx in range(-sw, sw+1):
+        for dy in range(-sw, sw+1):
+            if dx == 0 and dy == 0: continue
+            draw.text((x+dx, y+dy), text, font=font, fill=stroke, anchor=anchor)
+    draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
+
+
+def _draw_bill(draw, x, y, angle_deg):
+    """Draw a small green dollar bill rectangle (rotated via polygon)."""
+    import math
+    w, h  = 70, 32
+    angle = math.radians(angle_deg)
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    corners = [(-w//2,-h//2),(w//2,-h//2),(w//2,h//2),(-w//2,h//2)]
+    pts = [(x + cx*cos_a - cy*sin_a, y + cx*sin_a + cy*cos_a) for cx,cy in corners]
+    draw.polygon(pts, fill=(30, 100, 40), outline=(20, 70, 25))
+    draw.text((x-6, y-8), "$", fill=(60, 180, 70),
+              font=_load_font(None, 18))
