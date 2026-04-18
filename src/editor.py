@@ -1,4 +1,4 @@
-﻿"""
+"""
 src/editor.py - Financial Hero Editor (moviepy 2.x compatible)
 """
 import logging, textwrap, os, requests, tempfile, io
@@ -59,7 +59,7 @@ def _pexels_background(duration, api_key):
         tmp.write(requests.get(video_url, timeout=30).content)
         tmp.close()
         clip = VideoFileClip(tmp.name).without_audio().resized((WIDTH, HEIGHT))
-        clip = clip.looped(duration=duration) if clip.duration < duration else clip.subclipped(0, duration)
+        clip = clip.with_duration(duration) if clip.duration < duration else clip.subclipped(0, duration)
         log.info(f"Pexels background: {query}")
         return clip
     except Exception as e:
@@ -86,7 +86,7 @@ def _pixabay_background(duration, api_key):
         tmp.write(requests.get(video_url, timeout=30).content)
         tmp.close()
         clip = VideoFileClip(tmp.name).without_audio().resized((WIDTH, HEIGHT))
-        clip = clip.looped(duration=duration) if clip.duration < duration else clip.subclipped(0, duration)
+        clip = clip.with_duration(duration) if clip.duration < duration else clip.subclipped(0, duration)
         log.info(f"Pixabay background: {query}")
         return clip
     except Exception as e:

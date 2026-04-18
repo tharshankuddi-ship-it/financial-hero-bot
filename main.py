@@ -43,7 +43,7 @@ def run():
         log.info("Rendering video...")
         render_video(script=script, audio_path=audio_path, output_path=video_path, font_path=str(FONT_PATH))
         log.info("Getting fresh token...")
-        result = subprocess.run(["python", "get_token.py"], cwd="E:\\files", capture_output=True, text=True)
+        result = subprocess.run(["python", "get_token.py"], cwd=os.path.dirname(os.path.abspath(__file__)), capture_output=True, text=True)
         lines = [l.strip() for l in result.stdout.split('\n') if l.strip().startswith('1//') or l.strip().startswith('1/')]
         if lines:
             os.environ["YT_REFRESH_TOKEN"] = lines[0]
