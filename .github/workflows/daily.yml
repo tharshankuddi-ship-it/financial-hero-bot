@@ -1,0 +1,40 @@
+﻿name: Financial Hero - Daily YouTube Shorts
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  post-short:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download font
+        run: |
+          mkdir -p fonts
+          curl -L "https://github.com/google/fonts/raw/main/apache/oswald/Oswald%5Bwght%5D.ttf" -o fonts/main.ttf
+
+      - name: Run pipeline
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: python main.py
