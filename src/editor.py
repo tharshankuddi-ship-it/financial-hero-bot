@@ -127,86 +127,121 @@ def _get_background(duration: float):
     return _gradient_background(duration)
 
 
-def _pexels_background(duration: float, api_key: str):
-    import random
+def _download_and_open_video(video_url: str, duration: float):
+    """
+    Shared helper: stream-download a video URL to a temp file, validate it
+    with ffprobe before handing it to MoviePy, then clean up the temp file.
+    Returns a ready-to-use VideoFileClip, or None on any failure.
+    """
+    import subprocess
     tmp_path = None
     try:
-        query    = random.choice(PEXELS_QUERIES)
-        url      = (f"https://api.pexels.com/videos/search"
-                    f"?query={query}&per_page=10&orientation=portrait")
-        resp     = requests.get(url, headers={"Authorization": api_key}, timeout=10)
-        videos   = resp.json().get("videos", [])
-        if not videos:
-            return None
-        v        = random.choice(videos)
-        files    = sorted(v["video_files"], key=lambda x: x.get("width", 0), reverse=True)
-        video_url = files[0]["link"]
+        # ── 1. Stream download (avoids loading entire file into RAM) ──────
+        dl_resp = requests.get(video_url, timeout=60, stream=True)
+        dl_resp.raise_for_status()
 
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp_path = tmp.name
-            tmp.write(requests.get(video_url, timeout=30).content)
+            for chunk in dl_resp.iter_content(chunk_size=1 << 16):  # 64 KB chunks
+                tmp.write(chunk)
 
+        # ── 2. Sanity-check: file must be > 50 KB ─────────────────────────
+        file_size = os.path.getsize(tmp_path)
+        if file_size < 50_000:
+            log.warning(f"Downloaded video too small ({file_size} bytes) — skipping")
+            return None
+
+        # ── 3. Validate with ffprobe before touching MoviePy ──────────────
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", tmp_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            log.warning(f"ffprobe validation failed: {probe.stderr.strip()[:120]}")
+            return None
+
+        # ── 4. Open with MoviePy ──────────────────────────────────────────
         raw  = VideoFileClip(tmp_path).without_audio().resized((WIDTH, HEIGHT))
-        clip = raw.copy()          # force full load so we can safely delete the file
-        raw.close()
-        clip = (clip.with_duration(duration)
-                if clip.duration < duration
-                else clip.subclipped(0, duration))
-        log.info(f"Pexels background: {query}")
+        clip = (raw.with_duration(duration)
+                if raw.duration < duration
+                else raw.subclipped(0, duration))
+        # Keep tmp file alive — MoviePy reads lazily; clean up after render
+        # by registering a finalizer instead of deleting immediately
+        clip._tmp_path_to_cleanup = tmp_path
         return clip
+
+    except Exception as e:
+        log.warning(f"Video download/open failed ({video_url[:60]}): {e}")
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.unlink(tmp_path)
+            except OSError: pass
+        return None
+
+
+def _pexels_background(duration: float, api_key: str):
+    import random
+    try:
+        query = random.choice(PEXELS_QUERIES)
+        url   = (f"https://api.pexels.com/videos/search"
+                 f"?query={query}&per_page=10&orientation=portrait")
+        resp  = requests.get(url, headers={"Authorization": api_key}, timeout=10)
+        resp.raise_for_status()
+        videos = resp.json().get("videos", [])
+        if not videos:
+            log.warning("Pexels: no videos returned")
+            return None
+
+        # Shuffle and try up to 3 videos — skip any that are corrupt/empty
+        random.shuffle(videos)
+        for v in videos[:3]:
+            files     = sorted(v["video_files"], key=lambda x: x.get("width", 0), reverse=True)
+            video_url = files[0]["link"]
+            clip      = _download_and_open_video(video_url, duration)
+            if clip is not None:
+                log.info(f"Pexels background: {query}")
+                return clip
+
+        log.warning("Pexels: all candidate videos failed — falling through")
+        return None
     except Exception as e:
         log.warning(f"Pexels failed: {e}")
         return None
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
 
 
 def _pixabay_background(duration: float, api_key: str):
     import random
-    tmp_path = None
     try:
         query = random.choice(PIXABAY_QUERIES)
         url   = (f"https://pixabay.com/api/videos/"
                  f"?key={api_key}&q={query}&video_type=film&per_page=10")
         resp  = requests.get(url, timeout=10)
+        resp.raise_for_status()
         hits  = resp.json().get("hits", [])
         if not hits:
-            return None
-        v      = random.choice(hits)
-        videos = v.get("videos", {})
-        video_url = None
-        for quality in ("large", "medium", "small", "tiny"):
-            if quality in videos:
-                video_url = videos[quality]["url"]
-                break
-        if not video_url:
+            log.warning("Pixabay: no videos returned")
             return None
 
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-            tmp_path = tmp.name
-            tmp.write(requests.get(video_url, timeout=30).content)
+        random.shuffle(hits)
+        for v in hits[:3]:
+            videos = v.get("videos", {})
+            video_url = None
+            for quality in ("large", "medium", "small", "tiny"):
+                if quality in videos:
+                    video_url = videos[quality]["url"]
+                    break
+            if not video_url:
+                continue
+            clip = _download_and_open_video(video_url, duration)
+            if clip is not None:
+                log.info(f"Pixabay background: {query}")
+                return clip
 
-        raw  = VideoFileClip(tmp_path).without_audio().resized((WIDTH, HEIGHT))
-        clip = raw.copy()
-        raw.close()
-        clip = (clip.with_duration(duration)
-                if clip.duration < duration
-                else clip.subclipped(0, duration))
-        log.info(f"Pixabay background: {query}")
-        return clip
+        log.warning("Pixabay: all candidate videos failed — falling through")
+        return None
     except Exception as e:
         log.warning(f"Pixabay failed: {e}")
         return None
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
 
 
 def _pollinations_background(duration: float):
