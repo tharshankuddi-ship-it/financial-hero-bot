@@ -9,11 +9,13 @@ log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You write viral YouTube Shorts scripts for a personal finance channel called The Financial Hero.
 Rules:
-- Exactly 3 sentences, max 60 words total.
-- Open with a shocking money hook.
-- End with a powerful truth that makes viewers want to save or share.
-- Plain text only, no emojis, no hashtags, no stage directions.
-- Write as if speaking directly to one person about their financial future."""
+- Write exactly 130 to 150 words — this must be spoken aloud in 50 to 60 seconds.
+- Structure: Hook (1 shocking sentence) → Problem (2 sentences) → Solution (2-3 sentences) → Call to action (1 sentence).
+- Open with a shocking money hook that stops the scroll.
+- End with a powerful truth or call to action that makes viewers want to save or share.
+- Plain text only, no emojis, no hashtags, no stage directions, no bullet points.
+- Write as if speaking directly to one person about their financial future.
+- Every sentence must flow naturally when spoken aloud."""
 
 FINANCE_TOPICS = [
     "why most people stay broke their entire life",
@@ -33,13 +35,9 @@ FINANCE_TOPICS = [
 ]
 
 FALLBACK_SCRIPTS = [
-    "Most people work 40 years and retire broke, but it does not have to be you. The wealthy do not work for money, they make money work for them through investing. Start today, even with one dollar, because time in the market beats timing the market.",
-    "The bank makes money every time you swipe your card, but almost nobody knows how to make the bank work for them. Compound interest is the most powerful force in finance, yet only 10 percent of people use it correctly. Open an index fund today and let time do the work.",
-    "Ninety five percent of people will never become wealthy because they trade time for money their entire lives. The wealthy build assets that generate income while they sleep. Your goal is not a higher salary, your goal is income that does not require your time.",
-    "Most people think being rich means earning more, but the truth is the wealthy simply spend less than they earn and invest the difference. A person earning 30000 a year who invests consistently will retire wealthier than someone earning 100000 who spends it all. Wealth is a habit, not an income level.",
-    "Inflation is silently stealing 7 percent of your savings every single year. The money sitting in your bank account is losing value while you sleep. Move it into assets that grow faster than inflation, or watch your future slowly disappear.",
-    "The number one reason people stay poor is they pay everyone else before paying themselves. Wealthy people automate their investments first and live on what is left. Pay yourself first, even if it is just 10 dollars, and your future self will thank you.",
-    "Most people spend 40 hours a week making money for someone else and zero hours building wealth for themselves. The rich spend their evenings learning about investing, not watching television. One hour a day of financial education will change the trajectory of your entire life.",
+    "Ninety five percent of people will retire with almost nothing, and most of them never saw it coming. They spent their entire lives working hard, paying bills, and hoping things would work out. But hope is not a financial plan. The wealthy do not leave retirement to chance. They automate their investments, live below their means, and let compound interest do the heavy lifting over decades. The difference between retiring rich and retiring broke is not your salary. It is your habits. Start by investing just ten percent of every paycheck into a low cost index fund. Do it automatically so you never have to think about it. Ten years from now, you will thank yourself for starting today instead of waiting for the perfect moment that never comes.",
+    "The bank makes billions of dollars every single year from people who do not understand how money works. Every time you carry a credit card balance, every time you take out a loan without reading the terms, the bank wins and you lose. But here is what they will never teach you in school. Compound interest works both ways. It can either destroy your finances through debt or build your wealth through investing. The wealthy use compound interest as a weapon. They invest early, they invest consistently, and they let time multiply their money while they sleep. You do not need to be rich to start. You need to start to become rich. Open an index fund today, invest whatever you can afford, and let the most powerful force in finance work for you.",
+    "Most people spend forty hours a week making money for someone else and zero hours building wealth for themselves. They trade their time for a paycheck, spend almost all of it, and save whatever is left over. The problem is that nothing is ever left over. Wealthy people flip this system completely. They pay themselves first by automatically investing before they spend a single dollar. Then they build assets that generate income without requiring their time. A rental property, an index fund, a business. These things work while you sleep. Your goal should not be a higher salary. Your goal should be income that does not require your presence. Start small, start now, and focus every spare dollar on buying assets that grow. Your future self is depending on the decisions you make today.",
 ]
 
 def pick_topic() -> str:
