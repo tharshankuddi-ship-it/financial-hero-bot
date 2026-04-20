@@ -62,7 +62,7 @@ def _gemini_script(topic: str, api_key: str) -> str:
         client   = genai.Client(api_key=api_key)
         prompt   = f"{SYSTEM_PROMPT}\n\nWrite a YouTube Shorts script about: {topic}"
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-latest",
             contents=prompt
         )
         return response.text.strip()
