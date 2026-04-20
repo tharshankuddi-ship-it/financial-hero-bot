@@ -58,14 +58,13 @@ def generate_script(topic: str) -> str:
 
 def _gemini_script(topic: str, api_key: str) -> str:
     try:
-        from google import genai
-        client   = genai.Client(api_key=api_key)
-        prompt   = f"{SYSTEM_PROMPT}\n\nWrite a YouTube Shorts script about: {topic}"
-        response = client.models.generate_content(
-            model="gemini-1.5-flash-latest",
-            contents=prompt
-        )
-        return response.text.strip()
+        import requests
+        prompt = f"{SYSTEM_PROMPT}\n\nWrite a YouTube Shorts script about: {topic}"
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+        body = {"contents": [{"parts": [{"text": prompt}]}]}
+        resp = requests.post(url, json=body, timeout=30)
+        resp.raise_for_status()
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
     except Exception as e:
         log.warning(f"Gemini failed ({e}), using fallback")
         return None
