@@ -2,8 +2,8 @@ name: Daily Financial Hero Post
 
 on:
   schedule:
-    - cron: '0 9 * * *'   # 9am UTC every day
-  workflow_dispatch:       # allow manual trigger from GitHub Actions tab
+    - cron: '0 9 * * *'
+  workflow_dispatch:
 
 jobs:
   post-short:
@@ -30,23 +30,14 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install \
-            moviepy \
-            pillow \
-            requests \
-            numpy \
-            gtts
+          pip install moviepy pillow requests numpy gtts
 
       - name: Run pipeline
         run: python src/main.py
         env:
-          # YouTube (required)
           YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN:  ${{ secrets.YT_REFRESH_TOKEN }}
-          # Video backgrounds (free signup at pexels.com and pixabay.com)
           PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY:   ${{ secrets.PIXABAY_API_KEY }}
-          # AI script generation (optional — templates work fine without this)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # NOTE: GEMINI_API_KEY is intentionally removed — quota always exhausted
