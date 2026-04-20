@@ -1,4 +1,4 @@
-﻿"""
+"""
 src/scripter.py - Gemini AI Script Writer for The Financial Hero
 """
 import os
@@ -62,7 +62,7 @@ def _gemini_script(topic: str, api_key: str) -> str:
         client   = genai.Client(api_key=api_key)
         prompt   = f"{SYSTEM_PROMPT}\n\nWrite a YouTube Shorts script about: {topic}"
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=prompt
         )
         return response.text.strip()
