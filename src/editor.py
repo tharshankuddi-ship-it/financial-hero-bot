@@ -36,24 +36,46 @@ TEXT_Y_POSITION     = int(HEIGHT * 0.68)
 # ── Varied query pools — different visual styles ───────────────────────────────
 # Each segment picks from a DIFFERENT category so visuals never repeat
 SEGMENT_QUERY_POOLS = [
-    # Category 1 — people / lifestyle
-    ["businessman counting money", "person holding cash",
-     "man checking phone stock", "woman investor laptop"],
-    # Category 2 — money / coins
-    ["gold coins falling", "dollar bills pile",
-     "bitcoin gold crypto", "money rain background"],
-    # Category 3 — charts / market
-    ["stock market chart", "trading screen finance",
-     "graph going up business", "financial data screen"],
-    # Category 4 — luxury / success
-    ["luxury car wealth success", "mansion wealthy lifestyle",
-     "private jet business", "luxury watch gold"],
-    # Category 5 — city / business
-    ["city skyline business", "office building corporate",
-     "busy city financial district", "wall street new york"],
-    # Category 6 — nature / calm
-    ["sunrise motivation success", "road to success journey",
-     "mountain peak achievement", "calm water reflection"],
+    # Category 1 — people working / stressed
+    ["stressed person bills desk", "tired worker office night",
+     "person worried money", "man counting coins table",
+     "woman stressed laptop finance", "person looking wallet empty"],
+    # Category 2 — cash / money physical
+    ["cash money hands counting", "dollar bills spread table",
+     "money envelope cash", "wallet full cash",
+     "person receiving paycheck", "banknotes counting close up"],
+    # Category 3 — investing / stocks
+    ["stock market green candles", "trading app phone screen",
+     "investment portfolio growth", "financial chart upward trend",
+     "crypto trading screen", "stock broker working screens"],
+    # Category 4 — luxury lifestyle
+    ["luxury penthouse interior", "sports car driving road",
+     "expensive watch close up", "yacht ocean luxury",
+     "fine dining restaurant", "first class airplane seat"],
+    # Category 5 — success / achievement
+    ["person celebrating success", "handshake business deal",
+     "young entrepreneur smiling", "team celebrating office",
+     "person fist pump achievement", "confident woman business"],
+    # Category 6 — city / skyline
+    ["new york city aerial", "london financial district",
+     "singapore city night", "dubai skyscrapers aerial",
+     "tokyo city timelapse", "chicago skyline river"],
+    # Category 7 — nature / time
+    ["time lapse clouds sky", "sunrise over mountains",
+     "hourglass sand time", "calendar pages turning",
+     "seasons change time lapse", "tree growing timelapse"],
+    # Category 8 — savings / bank
+    ["piggy bank saving money", "coins jar saving",
+     "bank building exterior", "credit card cutting scissors",
+     "savings account phone", "financial planning notebook"],
+    # Category 9 — real estate / property
+    ["house keys new home", "real estate aerial suburb",
+     "apartment building investment", "construction new building",
+     "luxury home interior", "sold sign house"],
+    # Category 10 — motivation / mindset
+    ["person reading book cafe", "morning routine productive",
+     "meditation focus calm", "running motivation fitness",
+     "whiteboard planning strategy", "person writing goals journal"],
 ]
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
@@ -161,8 +183,13 @@ def _get_segmented_background(total_duration: float):
     """
     Build a background that cuts to a NEW visual every SEGMENT_DURATION seconds.
     Each segment uses a different query category for visual variety.
+    Uses a time-based seed so every run picks different clips.
     """
     import random
+    import time
+    # Seed with current time so every run is different
+    random.seed(int(time.time()))
+
     n_segments   = max(1, int(total_duration / SEGMENT_DURATION))
     seg_duration = total_duration / n_segments
 
