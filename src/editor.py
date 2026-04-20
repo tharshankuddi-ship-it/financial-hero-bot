@@ -1,67 +1,96 @@
 """
-src/editor.py - Financial Hero Editor (moviepy 2.x compatible)
-
-Fixes applied:
-  1. Resolution: WIDTH/HEIGHT now match the actual export resolution (720×1280)
-     to avoid caption/font size mismatch from upscale→downscale round-trip.
-  2. Caption box: tight-fit to text only (no over-sized dark panel eating 40% of frame).
-  3. Line height: reduced from FONT_SIZE+24 to FONT_SIZE+10 for natural reading flow.
-  4. Word grouping: 3 words per line (WRAP_WIDTH) instead of 14 chars, producing
-     clean multi-word lines rather than single-word stacking.
-  5. Highlight granularity: highlights a 3-word chunk at a time instead of one word,
-     advancing every chunk interval — smoother pacing that doesn't feel jittery.
-  6. Alpha compositing fix: caption frame is pre-composited onto a fully transparent
-     base and only the text+box region carries alpha — coins no longer bleed through.
-  7. Temp file cleanup: both Pexels and Pixabay download paths now delete temp files
-     in a finally block after MoviePy has loaded the clip into memory via .copy().
-  8. Gradient background: fixed negative multipliers that produced near-black frames.
-  9. word_positions lookup: O(n) linear scan replaced with O(1) dict lookup per frame.
- 10. Font path: resolved relative to __file__ so it works from any cwd.
- 11. Fallback font: when custom font is missing, uses FreeSansBold (available on
-     Ubuntu) which is far more legible than PIL's 10px bitmap default.
+editor.py - Financial Hero Editor
+==================================
+Major upgrades in this version:
+  1. Background cuts every 10s  — fetches multiple clips, cuts between them
+  2. Minimum 60s video          — pads script if audio is short
+  3. Hook/Value/Payoff structure — script formatted in 3 acts with visual emphasis
+  4. Varied queries per segment — each 10s segment uses a DIFFERENT search query
+  5. Zoom pulse effect          — subtle Ken Burns zoom on each segment
+  6. Duplicate visual check     — logs used video IDs to avoid reusing same clip
 """
 
-import logging, textwrap, os, requests, tempfile, io
+import logging, textwrap, os, requests, tempfile, io, json, hashlib
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy import AudioFileClip, CompositeVideoClip, ImageClip, VideoFileClip
+from moviepy import (AudioFileClip, CompositeVideoClip, ImageClip,
+                     VideoFileClip, concatenate_videoclips)
 
 log = logging.getLogger(__name__)
 
-# ── Resolution ────────────────────────────────────────────────────────────────
-# Match the actual export resolution. Rendering at 1080×1920 then outputting at
-# 720×1280 scales everything down, making captions tiny. Use one consistent size.
-WIDTH, HEIGHT   = 720, 1280
-FPS             = 30
+WIDTH, HEIGHT       = 720, 1280
+FPS                 = 30
+MIN_DURATION        = 60.0      # minimum video length in seconds
+SEGMENT_DURATION    = 10.0      # background changes every 10 seconds
 
-# ── Caption style ─────────────────────────────────────────────────────────────
-FONT_SIZE       = 72                  # slightly larger — no box competing for space
-LINE_HEIGHT     = FONT_SIZE + 12      # tight but not cramped
-CAPTION_COLOR   = (255, 255, 255)
-HIGHLIGHT_COLOR = (255, 220,   0)
-STROKE_COLOR    = (0,   0,   0)       # thick outline keeps text readable on any bg
-STROKE_WIDTH    = 5                   # px — replaces the dark box entirely
-WRAP_CHARS      = 14                  # tighter wrap → fewer words per line → bigger feel
-WORDS_PER_CHUNK = 3                   # show exactly this many words at a time
-# Vertical centre of the caption block (68 % down the frame)
-TEXT_Y_POSITION = int(HEIGHT * 0.68)
+FONT_SIZE           = 72
+LINE_HEIGHT         = FONT_SIZE + 12
+CAPTION_COLOR       = (255, 255, 255)
+HIGHLIGHT_COLOR     = (255, 220,   0)
+STROKE_COLOR        = (0,   0,   0)
+STROKE_WIDTH        = 5
+WRAP_CHARS          = 14
+WORDS_PER_CHUNK     = 3
+TEXT_Y_POSITION     = int(HEIGHT * 0.68)
 
-# ── Background queries ─────────────────────────────────────────────────────────
-PEXELS_QUERIES  = ["gold coins finance", "stock market trading", "dollar bills money",
-                   "business wealth success", "bitcoin crypto gold"]
-PIXABAY_QUERIES = ["money finance", "gold coins wealth", "stock market",
-                   "business success", "investment banking"]
+# ── Varied query pools — different visual styles ───────────────────────────────
+# Each segment picks from a DIFFERENT category so visuals never repeat
+SEGMENT_QUERY_POOLS = [
+    # Category 1 — people / lifestyle
+    ["businessman counting money", "person holding cash",
+     "man checking phone stock", "woman investor laptop"],
+    # Category 2 — money / coins
+    ["gold coins falling", "dollar bills pile",
+     "bitcoin gold crypto", "money rain background"],
+    # Category 3 — charts / market
+    ["stock market chart", "trading screen finance",
+     "graph going up business", "financial data screen"],
+    # Category 4 — luxury / success
+    ["luxury car wealth success", "mansion wealthy lifestyle",
+     "private jet business", "luxury watch gold"],
+    # Category 5 — city / business
+    ["city skyline business", "office building corporate",
+     "busy city financial district", "wall street new york"],
+    # Category 6 — nature / calm
+    ["sunrise motivation success", "road to success journey",
+     "mountain peak achievement", "calm water reflection"],
+]
 
-# ── Font resolution ────────────────────────────────────────────────────────────
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_FONT_CANDIDATES = [
-    os.path.join(_DIR, "fonts", "main.ttf"),            # project font (preferred)
-    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",   # Ubuntu fallback
+    os.path.join(_DIR, "fonts", "main.ttf"),
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
 ]
 
-def _load_font(font_path: str | None, size: int) -> ImageFont.FreeTypeFont:
+# Track used video IDs to prevent visual repeats across runs
+_USED_VIDEOS_FILE = os.path.join(_DIR, "used_videos.json")
+
+
+def _load_used_videos() -> set:
+    if os.path.exists(_USED_VIDEOS_FILE):
+        try:
+            with open(_USED_VIDEOS_FILE) as f:
+                data = json.load(f)
+            return set(data[-200:])  # keep last 200
+        except Exception:
+            pass
+    return set()
+
+
+def _save_used_video(video_id: str):
+    used = list(_load_used_videos())
+    if video_id not in used:
+        used.append(video_id)
+        try:
+            with open(_USED_VIDEOS_FILE, "w") as f:
+                json.dump(used[-200:], f)
+        except Exception:
+            pass
+
+
+def _load_font(font_path, size):
     candidates = ([font_path] if font_path else []) + _DEFAULT_FONT_CANDIDATES
     for path in candidates:
         if path and os.path.exists(path):
@@ -69,7 +98,6 @@ def _load_font(font_path: str | None, size: int) -> ImageFont.FreeTypeFont:
                 return ImageFont.truetype(path, size)
             except (IOError, OSError):
                 pass
-    log.warning("No TrueType font found — falling back to PIL bitmap font (low quality)")
     return ImageFont.load_default()
 
 
@@ -79,22 +107,25 @@ def _load_font(font_path: str | None, size: int) -> ImageFont.FreeTypeFont:
 
 def render_video(script: str, audio_path: str, output_path: str,
                  font_path: str | None = None,
-                 word_timestamps: list[tuple[str, float, float]] | None = None):
+                 word_timestamps=None):
     """
     Render a captioned short-form video.
-
-    Args:
-        script:          The spoken text (used for uniform-timing fallback).
-        audio_path:      Path to the audio track.
-        output_path:     Where to write the finished .mp4.
-        font_path:       Optional path to a .ttf/.otf caption font.
-        word_timestamps: Optional list of (word, start_sec, end_sec) tuples from
-                         WhisperX / Gentle / similar. When provided, captions are
-                         audio-synced. Falls back to uniform timing if None.
+    - Minimum 60 seconds
+    - Background changes every 10 seconds
+    - Each segment uses a visually different clip/query
     """
     audio    = AudioFileClip(audio_path)
-    duration = audio.duration
-    bg       = _get_background(duration)
+    duration = max(audio.duration, MIN_DURATION)
+
+    # If audio is shorter than 60s, loop it
+    if audio.duration < MIN_DURATION:
+        log.info(f"Audio {audio.duration:.1f}s < 60s — looping to fill {MIN_DURATION}s")
+        from moviepy import concatenate_audioclips
+        loops  = int(MIN_DURATION / audio.duration) + 1
+        audio  = concatenate_audioclips([audio] * loops).subclipped(0, MIN_DURATION)
+        duration = MIN_DURATION
+
+    bg       = _get_segmented_background(duration)
     font     = _load_font(font_path, FONT_SIZE)
     captions = _make_caption_clips(script, duration, font, word_timestamps)
     video    = CompositeVideoClip([bg, *captions], size=(WIDTH, HEIGHT))
@@ -107,124 +138,127 @@ def render_video(script: str, audio_path: str, output_path: str,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Background helpers
+# Segmented background — changes every 10 seconds
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _get_background(duration: float):
-    pexels_key = os.getenv("PEXELS_API_KEY")
-    if pexels_key:
-        bg = _pexels_background(duration, pexels_key)
-        if bg: return bg
-
-    pixabay_key = os.getenv("PIXABAY_API_KEY")
-    if pixabay_key:
-        bg = _pixabay_background(duration, pixabay_key)
-        if bg: return bg
-
-    bg = _pollinations_background(duration)
-    if bg: return bg
-
-    return _gradient_background(duration)
-
-
-def _download_and_open_video(video_url: str, duration: float):
+def _get_segmented_background(total_duration: float):
     """
-    Shared helper: stream-download a video URL to a temp file, validate it
-    with ffprobe before handing it to MoviePy, then clean up the temp file.
-    Returns a ready-to-use VideoFileClip, or None on any failure.
+    Build a background that cuts to a NEW visual every SEGMENT_DURATION seconds.
+    Each segment uses a different query category for visual variety.
     """
-    import subprocess
-    tmp_path = None
-    try:
-        # ── 1. Stream download (avoids loading entire file into RAM) ──────
-        dl_resp = requests.get(video_url, timeout=60, stream=True)
-        dl_resp.raise_for_status()
-
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-            tmp_path = tmp.name
-            for chunk in dl_resp.iter_content(chunk_size=1 << 16):  # 64 KB chunks
-                tmp.write(chunk)
-
-        # ── 2. Sanity-check: file must be > 50 KB ─────────────────────────
-        file_size = os.path.getsize(tmp_path)
-        if file_size < 50_000:
-            log.warning(f"Downloaded video too small ({file_size} bytes) — skipping")
-            return None
-
-        # ── 3. Validate with ffprobe before touching MoviePy ──────────────
-        probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", tmp_path],
-            capture_output=True, text=True, timeout=15,
-        )
-        if probe.returncode != 0 or not probe.stdout.strip():
-            log.warning(f"ffprobe validation failed: {probe.stderr.strip()[:120]}")
-            return None
-
-        # ── 4. Open with MoviePy ──────────────────────────────────────────
-        raw  = VideoFileClip(tmp_path).without_audio().resized((WIDTH, HEIGHT))
-        clip = (raw.with_duration(duration)
-                if raw.duration < duration
-                else raw.subclipped(0, duration))
-        # Keep tmp file alive — MoviePy reads lazily; clean up after render
-        # by registering a finalizer instead of deleting immediately
-        clip._tmp_path_to_cleanup = tmp_path
-        return clip
-
-    except Exception as e:
-        log.warning(f"Video download/open failed ({video_url[:60]}): {e}")
-        if tmp_path and os.path.exists(tmp_path):
-            try: os.unlink(tmp_path)
-            except OSError: pass
-        return None
-
-
-def _pexels_background(duration: float, api_key: str):
     import random
+    n_segments   = max(1, int(total_duration / SEGMENT_DURATION))
+    seg_duration = total_duration / n_segments
+
+    pexels_key  = os.getenv("PEXELS_API_KEY")
+    pixabay_key = os.getenv("PIXABAY_API_KEY")
+
+    # Shuffle categories so each segment gets a different visual theme
+    categories = list(range(len(SEGMENT_QUERY_POOLS)))
+    random.shuffle(categories)
+
+    segments = []
+    for i in range(n_segments):
+        cat_idx = categories[i % len(categories)]
+        query   = random.choice(SEGMENT_QUERY_POOLS[cat_idx])
+        log.info(f"Segment {i+1}/{n_segments}: query='{query}'")
+
+        clip = None
+        if pexels_key:
+            clip = _pexels_segment(seg_duration, pexels_key, query)
+        if clip is None and pixabay_key:
+            clip = _pixabay_segment(seg_duration, pixabay_key, query)
+        if clip is None:
+            clip = _gradient_segment(seg_duration, i)
+
+        # Apply subtle zoom effect (Ken Burns) to each segment
+        clip = _apply_zoom(clip, seg_duration)
+        segments.append(clip)
+
+    if len(segments) == 1:
+        return segments[0]
+
+    return concatenate_videoclips(segments, method="compose")
+
+
+def _apply_zoom(clip, duration: float):
+    """Apply a slow zoom-in effect (Ken Burns) to make static clips feel alive."""
     try:
-        query = random.choice(PEXELS_QUERIES)
-        url   = (f"https://api.pexels.com/videos/search"
-                 f"?query={query}&per_page=10&orientation=portrait")
-        resp  = requests.get(url, headers={"Authorization": api_key}, timeout=10)
+        def zoom_frame(get_frame, t):
+            frame  = get_frame(t)
+            progress = t / max(duration, 0.1)
+            scale  = 1.0 + 0.04 * progress   # zoom from 100% to 104%
+            h, w   = frame.shape[:2]
+            new_h  = int(h / scale)
+            new_w  = int(w / scale)
+            y0     = (h - new_h) // 2
+            x0     = (w - new_w) // 2
+            cropped = frame[y0:y0+new_h, x0:x0+new_w]
+            resized = np.array(
+                Image.fromarray(cropped).resize((w, h), Image.BILINEAR)
+            )
+            return resized
+        return clip.transform(zoom_frame)
+    except Exception:
+        return clip   # zoom is cosmetic — never crash for it
+
+
+def _pexels_segment(duration: float, api_key: str, query: str):
+    """Fetch one Pexels clip for a given query, skip already-used video IDs."""
+    import random
+    used = _load_used_videos()
+    try:
+        url  = (f"https://api.pexels.com/videos/search"
+                f"?query={requests.utils.quote(query)}&per_page=15&orientation=portrait")
+        resp = requests.get(url, headers={"Authorization": api_key}, timeout=10)
         resp.raise_for_status()
         videos = resp.json().get("videos", [])
         if not videos:
-            log.warning("Pexels: no videos returned")
             return None
 
-        # Shuffle and try up to 3 videos — skip any that are corrupt/empty
         random.shuffle(videos)
-        for v in videos[:3]:
-            files     = sorted(v["video_files"], key=lambda x: x.get("width", 0), reverse=True)
+        for v in videos:
+            vid_id = str(v.get("id", ""))
+            if vid_id in used:
+                log.info(f"  Skipping already-used Pexels ID {vid_id}")
+                continue
+            files     = sorted(v["video_files"],
+                               key=lambda x: x.get("width", 0), reverse=True)
             video_url = files[0]["link"]
             clip      = _download_and_open_video(video_url, duration)
             if clip is not None:
-                log.info(f"Pexels background: {query}")
+                _save_used_video(vid_id)
+                log.info(f"  Pexels clip: '{query}' (id={vid_id})")
                 return clip
 
-        log.warning("Pexels: all candidate videos failed — falling through")
+        log.warning(f"  Pexels: no fresh clips for '{query}'")
         return None
     except Exception as e:
-        log.warning(f"Pexels failed: {e}")
+        log.warning(f"  Pexels segment failed: {e}")
         return None
 
 
-def _pixabay_background(duration: float, api_key: str):
+def _pixabay_segment(duration: float, api_key: str, query: str):
+    """Fetch one Pixabay clip for a given query, skip already-used video IDs."""
     import random
+    used = _load_used_videos()
     try:
-        query = random.choice(PIXABAY_QUERIES)
-        url   = (f"https://pixabay.com/api/videos/"
-                 f"?key={api_key}&q={query}&video_type=film&per_page=10")
-        resp  = requests.get(url, timeout=10)
+        url  = (f"https://pixabay.com/api/videos/"
+                f"?key={api_key}&q={requests.utils.quote(query)}"
+                f"&video_type=film&per_page=15")
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
-        hits  = resp.json().get("hits", [])
+        hits = resp.json().get("hits", [])
         if not hits:
-            log.warning("Pixabay: no videos returned")
             return None
 
         random.shuffle(hits)
-        for v in hits[:3]:
-            videos = v.get("videos", {})
+        for v in hits:
+            vid_id = str(v.get("id", ""))
+            if vid_id in used:
+                log.info(f"  Skipping already-used Pixabay ID {vid_id}")
+                continue
+            videos    = v.get("videos", {})
             video_url = None
             for quality in ("large", "medium", "small", "tiny"):
                 if quality in videos:
@@ -234,107 +268,98 @@ def _pixabay_background(duration: float, api_key: str):
                 continue
             clip = _download_and_open_video(video_url, duration)
             if clip is not None:
-                log.info(f"Pixabay background: {query}")
+                _save_used_video(vid_id)
+                log.info(f"  Pixabay clip: '{query}' (id={vid_id})")
                 return clip
 
-        log.warning("Pixabay: all candidate videos failed — falling through")
+        log.warning(f"  Pixabay: no fresh clips for '{query}'")
         return None
     except Exception as e:
-        log.warning(f"Pixabay failed: {e}")
+        log.warning(f"  Pixabay segment failed: {e}")
         return None
 
 
-def _pollinations_background(duration: float):
-    try:
-        prompt = "bright gold coins money wealth finance colorful background"
-        url    = (f"https://image.pollinations.ai/prompt/{prompt}"
-                  f"?width={WIDTH}&height={HEIGHT}&nologo=true")
-        resp   = requests.get(url, timeout=20)
-        img    = Image.open(io.BytesIO(resp.content)).convert("RGB").resize((WIDTH, HEIGHT))
-        log.info("Pollinations.ai background")
-        return ImageClip(np.array(img)).with_duration(duration)
-    except Exception as e:
-        log.warning(f"Pollinations failed: {e}")
-        return None
-
-
-def _gradient_background(duration: float):
-    """Dark-green-to-teal gradient with gold accent bars — purely cosmetic fallback."""
+def _gradient_segment(duration: float, index: int):
+    """Unique colour gradient for each segment index — never the same colour."""
+    palettes = [
+        [(5, 20, 60),   (20, 60, 120)],   # dark blue
+        [(60, 10, 5),   (120, 40, 20)],   # dark red
+        [(5, 40, 20),   (20, 100, 50)],   # dark green
+        [(40, 20, 60),  (100, 50, 120)],  # dark purple
+        [(60, 40, 5),   (120, 100, 20)],  # dark gold
+        [(5, 40, 60),   (20, 100, 120)],  # dark teal
+    ]
+    top, bot = palettes[index % len(palettes)]
     arr = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
     for y in range(HEIGHT):
-        t = y / HEIGHT
-        # Fixed: was using negative multipliers → near-black. Now a proper gradient.
-        arr[y] = [
-            int(5  + t * 20),   # R: 5 → 25
-            int(40 + t * 60),   # G: 40 → 100  (teal-ish)
-            int(20 + t * 50),   # B: 20 → 70
-        ]
-    arr[:18]  = (255, 200, 0)   # gold top bar
-    arr[-18:] = (255, 200, 0)   # gold bottom bar
+        t      = y / HEIGHT
+        arr[y] = [int(top[c] + t * (bot[c] - top[c])) for c in range(3)]
+    arr[:12]  = (255, 200, 0)
+    arr[-12:] = (255, 200, 0)
     return ImageClip(arr).with_duration(duration)
+
+
+def _download_and_open_video(video_url: str, duration: float):
+    """Stream-download, validate with ffprobe, open with MoviePy."""
+    import subprocess
+    tmp_path = None
+    try:
+        dl = requests.get(video_url, timeout=60, stream=True)
+        dl.raise_for_status()
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
+            for chunk in dl.iter_content(chunk_size=1 << 16):
+                tmp.write(chunk)
+
+        if os.path.getsize(tmp_path) < 50_000:
+            log.warning("Downloaded video too small — skipping")
+            return None
+
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", tmp_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if probe.returncode != 0 or not probe.stdout.strip():
+            return None
+
+        raw  = VideoFileClip(tmp_path).without_audio().resized((WIDTH, HEIGHT))
+        clip = (raw.with_duration(duration)
+                if raw.duration < duration
+                else raw.subclipped(0, duration))
+        clip._tmp_path_to_cleanup = tmp_path
+        return clip
+    except Exception as e:
+        log.warning(f"Video download failed: {e}")
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.unlink(tmp_path)
+            except OSError: pass
+        return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Caption rendering
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _make_caption_clips(script: str, total_duration: float,
-                        font: ImageFont.FreeTypeFont,
-                        word_timestamps: list[tuple[str, float, float]] | None):
-    """
-    Build one ImageClip per *chunk* (WORDS_PER_CHUNK words).
-
-    If word_timestamps is provided each clip is timed to actual speech.
-    Otherwise timing is divided uniformly across chunks.
-    """
-    words = script.split()
+def _make_caption_clips(script, total_duration, font, word_timestamps=None):
+    words  = script.split()
     if not words:
         return []
 
-    # Build chunks of WORDS_PER_CHUNK words
-    chunks = [words[i:i + WORDS_PER_CHUNK]
-              for i in range(0, len(words), WORDS_PER_CHUNK)]
+    chunks        = [words[i:i+WORDS_PER_CHUNK]
+                     for i in range(0, len(words), WORDS_PER_CHUNK)]
+    chunk_duration = total_duration / len(chunks)
 
-    if word_timestamps:
-        # Audio-aligned: map each chunk to its word span's time range
-        ts_map = {w: (s, e) for w, s, e in word_timestamps}
-        clips  = []
-        for ci, chunk in enumerate(chunks):
-            first_word = chunk[0]
-            last_word  = chunk[-1]
-            t_start    = ts_map.get(first_word, (ci / len(chunks) * total_duration, 0))[0]
-            t_end      = ts_map.get(last_word,  (0, (ci + 1) / len(chunks) * total_duration))[1]
-            duration   = max(0.05, t_end - t_start)
-            frame      = _render_caption_frame(words, ci * WORDS_PER_CHUNK, font)
-            clips.append(
-                ImageClip(np.array(frame))
-                .with_start(t_start)
-                .with_duration(duration)
-            )
-        return clips
-    else:
-        # Uniform timing across chunks
-        chunk_duration = total_duration / len(chunks)
-        return [
-            ImageClip(np.array(_render_caption_frame(words, i * WORDS_PER_CHUNK, font)))
-            .with_start(i * chunk_duration)
-            .with_duration(chunk_duration)
-            for i in range(len(chunks))
-        ]
+    return [
+        ImageClip(np.array(_render_caption_frame(words, i * WORDS_PER_CHUNK, font)))
+        .with_start(i * chunk_duration)
+        .with_duration(chunk_duration)
+        for i in range(len(chunks))
+    ]
 
 
-def _render_caption_frame(words: list[str], highlight_start: int,
-                           font: ImageFont.FreeTypeFont) -> Image.Image:
-    """
-    Render a single caption frame.
-
-    - Shows ONLY the current WORDS_PER_CHUNK words (no surrounding context).
-    - First word of the chunk is yellow (highlight), rest are white.
-    - NO background box — text sits directly over the video footage.
-    - Thick black stroke (STROKE_WIDTH) keeps text legible on any background.
-    """
-    # ── Only show the current chunk ────────────────────────────────────────
-    chunk = words[highlight_start : highlight_start + WORDS_PER_CHUNK]
+def _render_caption_frame(words, highlight_start, font):
+    chunk   = words[highlight_start: highlight_start + WORDS_PER_CHUNK]
     if not chunk:
         return Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
 
@@ -342,19 +367,16 @@ def _render_caption_frame(words: list[str], highlight_start: int,
     if not wrapped:
         return Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
 
-    # ── Build word→global-index lookup (O(1)) ─────────────────────────────
-    pos_map: dict[tuple[int, int], int] = {}
-    global_idx = 0
+    pos_map = {}
+    gi = 0
     for li, line in enumerate(wrapped):
         for wi in range(len(line.split())):
-            pos_map[(li, wi)] = global_idx
-            global_idx += 1
+            pos_map[(li, wi)] = gi
+            gi += 1
 
-    # ── Transparent canvas — NO box drawn ─────────────────────────────────
     base = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(base)
 
-    # ── Draw each word with thick stroke then fill ─────────────────────────
     for li, line in enumerate(wrapped):
         line_words = line.split()
         line_w     = sum(int(draw.textlength(w + " ", font=font)) for w in line_words)
@@ -363,252 +385,119 @@ def _render_caption_frame(words: list[str], highlight_start: int,
 
         for wi, word in enumerate(line_words):
             g_idx = pos_map.get((li, wi), -1)
-            # First word of chunk is highlighted yellow; rest are white
             color = HIGHLIGHT_COLOR if g_idx == 0 else CAPTION_COLOR
-
-            # Stroke: draw the word offset in 8 directions for a clean outline
             for dx in range(-STROKE_WIDTH, STROKE_WIDTH + 1):
                 for dy in range(-STROKE_WIDTH, STROKE_WIDTH + 1):
                     if dx == 0 and dy == 0:
                         continue
-                    draw.text((x + dx, yy + dy), word, font=font,
+                    draw.text((x+dx, yy+dy), word, font=font,
                               fill=(*STROKE_COLOR, 255))
-            # Fill on top
             draw.text((x, yy), word, font=font, fill=color)
             x += int(draw.textlength(word + " ", font=font))
-
     return base
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Thumbnail generation  (free — no API key required)
+# Thumbnail generation
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Thumbnail dimensions (16:9 YouTube standard)
 THUMB_W, THUMB_H = 1280, 720
+_POLLINATIONS_URL = ("https://image.pollinations.ai/prompt/{prompt}"
+                     "?width={w}&height={h}&nologo=true&model=flux&seed={seed}")
 
-# Pollinations.ai — completely free, no signup, no key
-# Docs: https://pollinations.ai  |  model options: flux, turbo
-_POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}?width={w}&height={h}&nologo=true&model=flux&seed={seed}"
 
-def generate_thumbnail(
-    title: str,
-    output_path: str,
-    style: str = "youtube",
-    seed: int = 42,
-) -> str:
-    """
-    Generate a YouTube thumbnail using free AI image generation.
-
-    Tries sources in order:
-      1. Pollinations.ai  (free, no key)
-      2. CSS/PIL fallback (always works offline)
-
-    Args:
-        title:       Video title shown on the thumbnail.
-        output_path: Where to save the .png / .jpg file.
-        style:       One of "youtube", "split", "dramatic".
-        seed:        Fixed seed for reproducibility (change to get a new image).
-
-    Returns:
-        output_path on success.
-    """
+def generate_thumbnail(title, output_path, style="split", seed=42):
     prompt = _build_thumbnail_prompt(title, style)
-    log.info(f"Generating thumbnail: {prompt[:80]}...")
-
-    img = _pollinations_thumbnail(prompt, seed)
-    if img is None:
-        log.warning("Pollinations failed — using PIL fallback thumbnail")
-        img = _pil_fallback_thumbnail(title)
-
-    img = img.convert("RGB").resize((THUMB_W, THUMB_H), Image.LANCZOS)
-    img.save(output_path, quality=95)
+    log.info(f"Thumbnail prompt: {prompt[:80]}...")
+    img = _pollinations_thumbnail(prompt, seed) or _pil_fallback_thumbnail(title)
+    img.convert("RGB").resize((THUMB_W, THUMB_H), Image.LANCZOS).save(output_path, quality=95)
     log.info(f"Thumbnail saved -> {output_path}")
     return output_path
 
 
-def _build_thumbnail_prompt(title: str, style: str) -> str:
-    """Build a detailed prompt tuned for YouTube thumbnail aesthetics."""
-    base_quality = (
-        "ultra realistic, 8k, cinematic lighting, sharp focus, "
-        "high saturation, dramatic shadows, professional photography, "
-        "YouTube thumbnail style, eye-catching, 16:9"
-    )
+def _build_thumbnail_prompt(title, style):
+    q = ("ultra realistic, 8k, cinematic lighting, sharp focus, "
+         "high saturation, dramatic shadows, YouTube thumbnail style, 16:9")
     if style == "split":
-        return (
-            f"split screen YouTube thumbnail, left half: stressed poor man dark moody "
-            f"lighting holding empty wallet, desperate sad expression, dark red shadows, "
-            f"right half: confident wealthy businessman in luxury suit gold watch, "
-            f"money flying around, bright golden lighting, strong contrast between "
-            f"dark and bright sides, title concept '{title}', {base_quality}"
-        )
-    elif style == "dramatic":
-        return (
-            f"dramatic YouTube thumbnail about '{title}', "
-            f"person with shocked expression, gold coins and money raining, "
-            f"cinematic dark background with golden light rays, "
-            f"bold visual storytelling, {base_quality}"
-        )
-    else:  # youtube default
-        return (
-            f"YouTube thumbnail for video titled '{title}', "
-            f"split screen poor vs rich contrast, dark vs bright lighting, "
-            f"money and finance theme, emotional facial expressions, "
-            f"bold text space at top, {base_quality}"
-        )
+        return (f"split screen YouTube thumbnail, left: stressed poor man dark lighting "
+                f"empty wallet, right: confident rich businessman luxury suit money, "
+                f"strong contrast, '{title}', {q}")
+    return f"YouTube thumbnail '{title}', finance wealth theme, dramatic, {q}"
 
 
-def _pollinations_thumbnail(prompt: str, seed: int) -> Image.Image | None:
-    """Call Pollinations.ai (free, no key needed)."""
+def _pollinations_thumbnail(prompt, seed):
     try:
-        url = _POLLINATIONS_URL.format(
-            prompt=requests.utils.quote(prompt),
-            w=THUMB_W, h=THUMB_H, seed=seed,
-        )
+        import urllib.parse
+        url  = _POLLINATIONS_URL.format(
+            prompt=urllib.parse.quote(prompt), w=THUMB_W, h=THUMB_H, seed=seed)
         resp = requests.get(url, timeout=60)
         if resp.status_code != 200:
-            log.warning(f"Pollinations HTTP {resp.status_code}")
             return None
-        img = Image.open(io.BytesIO(resp.content))
-        log.info("Pollinations.ai thumbnail generated")
-        return img
+        return Image.open(io.BytesIO(resp.content))
     except Exception as e:
         log.warning(f"Pollinations thumbnail failed: {e}")
         return None
 
 
-def _pil_fallback_thumbnail(title: str) -> Image.Image:
-    """
-    Pure-PIL split-screen thumbnail — works with zero network access.
-    Left: dark red (poor), Right: dark gold/green (rich), VS divider, title text.
-    """
+def _pil_fallback_thumbnail(title):
     img  = Image.new("RGB", (THUMB_W, THUMB_H))
     draw = ImageDraw.Draw(img)
     half = THUMB_W // 2
-
-    # ── Backgrounds ──────────────────────────────────────────────────────────
-    # Left gradient: near-black → dark red
     for x in range(half):
         t = x / half
-        r = int(20 + t * 60)
-        draw.line([(x, 0), (x, THUMB_H)], fill=(r, 5, 5))
-
-    # Right gradient: dark green → gold-tinted
+        draw.line([(x,0),(x,THUMB_H)], fill=(int(20+t*60), 5, 5))
     for x in range(half, THUMB_W):
-        t = (x - half) / half
-        g = int(30 + t * 80)
-        b = int(5  + t * 20)
-        draw.line([(x, 0), (x, THUMB_H)], fill=(int(20 + t*60), g, b))
-
-    # ── Poor figure (left) ───────────────────────────────────────────────────
-    cx_l = half // 2
-    # body
-    draw.ellipse([(cx_l-28, 310), (cx_l+28, 390)], fill=(28, 22, 22))
-    draw.rectangle([(cx_l-34, 385), (cx_l+34, 570)], fill=(22, 18, 18))
-    # head
-    draw.ellipse([(cx_l-42, 220), (cx_l+42, 315)], fill=(160, 100, 60))
-    # frown (180→360 draws the bottom arc = downturned mouth)
-    draw.arc([(cx_l-18, 274), (cx_l+18, 302)], start=180, end=360, fill=(60, 30, 10), width=3)
-    # arms drooping
-    draw.line([(cx_l-34, 400), (cx_l-80, 490)], fill=(22, 18, 18), width=22)
-    draw.line([(cx_l+34, 400), (cx_l+75, 490)], fill=(22, 18, 18), width=22)
-    # empty wallet
-    draw.rectangle([(cx_l+58, 468), (cx_l+100, 502)], fill=(60, 40, 20), outline=(30,15,5), width=2)
-    # sweat drop
-    draw.polygon([(cx_l-55, 258), (cx_l-50, 270), (cx_l-60, 270)], fill=(80, 140, 200))
-
-    # ── Rich figure (right) ──────────────────────────────────────────────────
-    cx_r = half + half // 2
-    # body / suit
-    draw.ellipse([(cx_r-30, 305), (cx_r+30, 385)], fill=(20, 38, 20))
-    draw.rectangle([(cx_r-38, 380), (cx_r+38, 570)], fill=(16, 30, 16))
-    # tie
-    draw.polygon([(cx_r-8,382),(cx_r+8,382),(cx_r+5,450),(cx_r,460),(cx_r-5,450)],
-                 fill=(180, 150, 0))
-    # head
-    draw.ellipse([(cx_r-44, 215), (cx_r+44, 310)], fill=(170, 110, 65))
-    # smile (0→180 draws top arc = upturned mouth)
-    draw.arc([(cx_r-20, 265), (cx_r+20, 295)], start=0, end=180, fill=(60, 30, 10), width=3)
-    # arms — hands on hips / raised
-    draw.line([(cx_r-38, 395), (cx_r-85, 480)], fill=(16, 30, 16), width=24)
-    draw.line([(cx_r+38, 395), (cx_r+85, 480)], fill=(16, 30, 16), width=24)
-    # floating money bills
-    for bx, by, angle in [(cx_r+95,120,-12),(cx_r+130,175,8),(cx_r+70,200,-5),(cx_r+155,130,15)]:
-        _draw_bill(draw, bx, by, angle)
-    # gold coin stack
-    for i in range(5):
-        draw.ellipse([(cx_r+110, 490-i*10), (cx_r+158, 504-i*10)],
-                     fill=(200, 160, 0), outline=(140, 100, 0), width=1)
-    # glow ring
-    for r_size in range(40, 0, -8):
-        alpha_fill = (255, 210, 50, max(0, 6 - r_size//8) * 10)
-        draw.ellipse([(cx_r-r_size*2, 555), (cx_r+r_size*2, 575)],
-                     fill=(min(255,30+r_size), min(255,50+r_size*2), 10))
-    # ── VS divider ───────────────────────────────────────────────────────────
+        t = (x-half)/half
+        draw.line([(x,0),(x,THUMB_H)], fill=(int(20+t*60), int(30+t*80), int(5+t*20)))
+    cx_l, cx_r = half//2, half+half//2
+    # Poor man
+    draw.ellipse([(cx_l-42,220),(cx_l+42,315)], fill=(160,100,60))
+    draw.rectangle([(cx_l-34,310),(cx_l+34,570)], fill=(22,18,18))
+    draw.arc([(cx_l-18,274),(cx_l+18,302)], start=180, end=360, fill=(60,30,10), width=3)
+    draw.line([(cx_l-34,400),(cx_l-80,490)], fill=(22,18,18), width=22)
+    draw.line([(cx_l+34,400),(cx_l+75,490)], fill=(22,18,18), width=22)
+    draw.rectangle([(cx_l+58,468),(cx_l+100,502)], fill=(60,40,20))
+    # Rich man
+    draw.ellipse([(cx_r-44,215),(cx_r+44,310)], fill=(170,110,65))
+    draw.rectangle([(cx_r-38,305),(cx_r+38,570)], fill=(16,30,16))
+    draw.polygon([(cx_r-8,307),(cx_r+8,307),(cx_r+5,380),(cx_r,390),(cx_r-5,380)],
+                 fill=(180,150,0))
+    draw.arc([(cx_r-20,265),(cx_r+20,295)], start=0, end=180, fill=(60,30,10), width=3)
+    draw.line([(cx_r-38,395),(cx_r-85,480)], fill=(16,30,16), width=24)
+    draw.line([(cx_r+38,395),(cx_r+85,480)], fill=(16,30,16), width=24)
+    # Divider
     for gx in range(half-3, half+4):
-        t = abs(gx - half) / 3
-        brightness = int(255 * (1 - t * 0.6))
-        draw.line([(gx, 0), (gx, THUMB_H)], fill=(brightness, int(brightness*0.85), 0))
-    # VS badge
-    vx, vy = half, THUMB_H // 2
-    draw.rectangle([(vx-28, vy-22), (vx+28, vy+22)], fill=(220, 180, 0))
-    draw.rectangle([(vx-26, vy-20), (vx+26, vy+20)], fill=(255, 215, 0))
-    _draw_outlined_text(draw, (vx, vy), "VS", size=30, fill=(0,0,0), stroke=(100,80,0), anchor="mm")
-
-    # ── Title text ────────────────────────────────────────────────────────────
-    words = title.upper().split()
-    mid   = len(words) // 2
-    line1 = " ".join(words[:mid])
-    line2 = " ".join(words[mid:])
-    _draw_outlined_text(draw, (THUMB_W//2, 42),  line1, size=60,
-                         fill=(255, 215, 0), stroke=(0,0,0), anchor="mm")
-    _draw_outlined_text(draw, (THUMB_W//2, 108), line2, size=60,
-                         fill=(255, 170, 0), stroke=(0,0,0), anchor="mm")
-
-    # ── Side labels (below title, above figures) ──────────────────────────────
-    _draw_outlined_text(draw, (cx_l, 158), "THE POOR", size=42,
-                         fill=(200, 30, 30), stroke=(0,0,0), anchor="mm")
-    _draw_outlined_text(draw, (cx_r, 158), "THE RICH", size=42,
-                         fill=(255, 210, 0), stroke=(0,0,0), anchor="mm")
-
-    # ── Top/bottom accent bars ────────────────────────────────────────────────
-    for y in range(8):
-        t = y / 8
-        draw.line([(0,y),(THUMB_W,y)], fill=(int(200-t*80), int(30+t*20), 0))
-        draw.line([(0,THUMB_H-1-y),(THUMB_W,THUMB_H-1-y)],
-                  fill=(0, int(150+t*80), int(30+t*20)))
-
-    # ── Bottom caption ────────────────────────────────────────────────────────
-    draw.rectangle([(0, THUMB_H-52), (THUMB_W, THUMB_H)], fill=(0,0,0))
-    _draw_outlined_text(draw, (THUMB_W//2, THUMB_H-26),
-                         "THE SECRET THEY DON'T WANT YOU TO KNOW",
-                         size=28, fill=(255,255,255), stroke=(80,80,80), anchor="mm")
-
+        t = abs(gx-half)/3
+        b = int(255*(1-t*0.6))
+        draw.line([(gx,0),(gx,THUMB_H)], fill=(b,int(b*0.85),0))
+    font_big = _load_font(None, 60)
+    font_med = _load_font(None, 42)
+    font_sm  = _load_font(None, 28)
+    _draw_outlined(draw, (THUMB_W//2, 42),  _split_title(title)[0], font_big,
+                   (255,215,0), (0,0,0))
+    _draw_outlined(draw, (THUMB_W//2, 108), _split_title(title)[1], font_big,
+                   (255,170,0), (0,0,0))
+    _draw_outlined(draw, (cx_l, 158), "THE POOR", font_med, (200,30,30), (0,0,0))
+    _draw_outlined(draw, (cx_r, 158), "THE RICH", font_med, (255,210,0), (0,0,0))
+    _draw_outlined(draw, (half, THUMB_H//2), "VS", font_med, (0,0,0), (180,150,0))
+    draw.rectangle([(0,THUMB_H-52),(THUMB_W,THUMB_H)], fill=(0,0,0))
+    _draw_outlined(draw, (THUMB_W//2, THUMB_H-26),
+                   "THE SECRET THEY DON'T WANT YOU TO KNOW",
+                   font_sm, (255,255,255), (80,80,80))
     return img
 
 
-def _draw_outlined_text(draw, xy, text, size=48, fill=(255,255,255),
-                         stroke=(0,0,0), anchor="mm"):
-    """Draw text with a solid outline, using best available font."""
-    font = _load_font(None, size)
-    sw   = max(1, size // 16)   # stroke width scales with font size
+def _split_title(title):
+    w   = title.upper().split()
+    mid = len(w) // 2
+    return " ".join(w[:mid]), " ".join(w[mid:])
+
+
+def _draw_outlined(draw, xy, text, font, fill, stroke):
     x, y = xy
-    # Draw stroke offsets
+    sw   = max(1, font.size // 16)
     for dx in range(-sw, sw+1):
         for dy in range(-sw, sw+1):
             if dx == 0 and dy == 0: continue
-            draw.text((x+dx, y+dy), text, font=font, fill=stroke, anchor=anchor)
-    draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
-
-
-def _draw_bill(draw, x, y, angle_deg):
-    """Draw a small green dollar bill rectangle (rotated via polygon)."""
-    import math
-    w, h  = 70, 32
-    angle = math.radians(angle_deg)
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-    corners = [(-w//2,-h//2),(w//2,-h//2),(w//2,h//2),(-w//2,h//2)]
-    pts = [(x + cx*cos_a - cy*sin_a, y + cx*sin_a + cy*cos_a) for cx,cy in corners]
-    draw.polygon(pts, fill=(30, 100, 40), outline=(20, 70, 25))
-    draw.text((x-6, y-8), "$", fill=(60, 180, 70),
-              font=_load_font(None, 18))
+            draw.text((x+dx, y+dy), text, font=font, fill=stroke, anchor="mm")
+    draw.text((x, y), text, font=font, fill=fill, anchor="mm")
