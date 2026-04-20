@@ -284,6 +284,17 @@ def pick_topic(out_dir: str = "output") -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_script(topic: str, api_key: str | None = None) -> str:
+    """
+    Generate script for topic.
+    - With ANTHROPIC_API_KEY: uses Claude AI (best quality)
+    - Without: uses built-in 160-200 word templates (still great)
+    - GEMINI is NOT used — removed due to quota issues
+    """
+    # Warn if someone accidentally passes Gemini key
+    if api_key and api_key.startswith("AI"):
+        log.warning("GEMINI key detected — Gemini is removed. Using template instead.")
+        log.warning("Set ANTHROPIC_API_KEY for AI scripts, or leave blank for templates.")
+        return _template_script(topic)
     if api_key:
         return _claude_script(topic, api_key)
     return _template_script(topic)
