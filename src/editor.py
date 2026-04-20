@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 WIDTH, HEIGHT       = 720, 1280
 FPS                 = 30
-MIN_DURATION        = 60.0      # minimum video length in seconds
+MIN_DURATION        = 55.0      # target minimum video length in seconds
 SEGMENT_DURATION    = 10.0      # background changes every 10 seconds
 
 FONT_SIZE           = 72
@@ -115,20 +115,9 @@ def render_video(script: str, audio_path: str, output_path: str,
     - Each segment uses a visually different clip/query
     """
     audio        = AudioFileClip(audio_path)
-    speech_dur   = audio.duration   # actual spoken duration — captions must follow THIS
-    video_dur    = max(speech_dur, MIN_DURATION)
-
-    # If speech is shorter than 60s, loop audio AND captions together
-    # so they stay in sync across every loop
-    if speech_dur < MIN_DURATION:
-        log.info(f"Audio {speech_dur:.1f}s < 60s — looping audio+captions to fill {MIN_DURATION}s")
-        from moviepy import concatenate_audioclips
-        loops      = int(MIN_DURATION / speech_dur) + 1
-        audio      = concatenate_audioclips([audio] * loops).subclipped(0, MIN_DURATION)
-        # Caption duration = one loop of speech, repeated to fill video
-        caption_loop_dur = speech_dur
-    else:
-        caption_loop_dur = speech_dur
+    speech_dur       = audio.duration   # video length = audio length, no looping
+    video_dur        = speech_dur
+    caption_loop_dur = speech_dur
 
     bg   = _get_segmented_background(video_dur)
     font = _load_font(font_path, FONT_SIZE)
