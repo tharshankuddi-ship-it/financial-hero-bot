@@ -68,114 +68,138 @@ TOPIC_POOL = [
 SCRIPT_TEMPLATES = {
     "compound interest": (
         # HOOK
-        "Nobody told you this in school and it is costing you thousands every year. "
+        "Nobody told you this in school and it is silently costing you thousands every single year. "
         # VALUE
         "If you invest just two hundred dollars a month starting at age twenty five, "
-        "by sixty five you will have over six hundred thousand dollars. "
+        "by sixty five you will have over six hundred thousand dollars sitting in your account. "
         "Wait until forty and that number crashes to one hundred and fifty thousand. "
         "Same money. Same discipline. Completely different result. "
-        "The only difference is time. "
-        "Compound interest doubles your money roughly every seven years. "
-        "That means every ten years you wait cuts your final wealth in half. "
+        "The only variable is time. "
+        "Compound interest doubles your money roughly every seven years at average market returns. "
+        "That means every ten years you delay cuts your final wealth in half. "
+        "A twenty five year old investing two hundred dollars a month becomes a millionaire. "
+        "A forty year old doing the exact same thing retires nearly broke. "
         # PAYOFF
-        "The wealthy did not get rich by being smarter. "
-        "They got rich by starting earlier. "
-        "You do not need a lot of money to build wealth. "
-        "You need time. And time is the one thing you can never buy back. "
-        "Open an account today. Start with ten dollars. The clock is already running."
+        "The wealthy did not get rich by being smarter than you. "
+        "They got rich by starting earlier than you. "
+        "You do not need a lot of money to start building real wealth. "
+        "You need time and consistency. "
+        "Time is the one thing money cannot buy back once it is gone. "
+        "Open an investment account today. Start with ten dollars if that is all you have. "
+        "Your future self will thank you for every single day you did not wait."
     ),
     "savings account": (
         # HOOK
-        "Your bank is robbing you in slow motion and you are saying thank you. "
+        "Your savings account is one of the worst places you can put your money right now. "
         # VALUE
         "Your savings account pays you half a percent interest. "
         "Inflation is running at seven percent. "
-        "That means every single year you lose six and a half percent of your money. "
-        "Ten thousand dollars in a savings account becomes worth eight thousand "
-        "in purchasing power in just three years. "
-        "Meanwhile the bank takes your deposits and lends them out at twenty percent. "
-        "They pocket the difference and give you almost nothing. "
+        "That means every single year your money loses six and a half percent of its real value. "
+        "Ten thousand dollars sitting in a savings account loses six hundred and fifty dollars "
+        "of purchasing power every year without you spending a single cent. "
+        "In ten years that same ten thousand can only buy what six thousand buys today. "
+        "Meanwhile the bank takes your deposits and lends them out at twenty percent interest. "
+        "They make nineteen and a half percent profit on your money. "
+        "And they give you half a percent back as a thank you. "
         # PAYOFF
-        "The rich do not keep cash in banks. "
+        "The wealthy figured this out decades ago. "
+        "They do not keep cash in savings accounts. "
         "They keep it in assets that grow faster than inflation. "
-        "Index funds. Real estate. Gold. Businesses. "
-        "Your money should be working as hard as you do. "
-        "Move it out of savings and into growth. Start today."
+        "Index funds. Real estate. Dividend stocks. Gold. Businesses. "
+        "These are the accounts the wealthy use as their savings. "
+        "Your money should be working as hard as you work every single day. "
+        "Move it out of savings and into growth assets this week. "
+        "Even one small step today protects your wealth from the silent robbery of inflation."
     ),
     "investing mistake": (
         # HOOK
-        "Most people make this one investing mistake that costs them their entire retirement. "
+        "Most people make this exact investing mistake and it costs them their entire retirement. "
         # VALUE
-        "They wait. They wait for the right time. The right market. The right moment. "
-        "But here is what the data actually shows. "
-        "Missing just the ten best trading days over a twenty year period "
+        "They wait. They wait for the right time. The right market. The perfect moment. "
+        "The market is too high they say. I will invest when it drops they say. "
+        "But here is what sixty years of stock market data actually shows. "
+        "Missing just the ten best trading days over a twenty year investment period "
         "cuts your total returns by more than fifty percent. "
-        "The best days always come right after the worst days. "
-        "The people who panic and sell always miss the recovery. "
-        "Time in the market always beats trying to time the market. "
+        "Not missing months. Not missing years. Just ten days out of twenty years. "
+        "And the best days always happen right after the worst days. "
+        "The people who panic and sell during crashes always miss the strongest recoveries. "
+        "Time in the market has beaten timing the market in every single decade of history. "
         # PAYOFF
-        "Rich people invest when the market is scary. "
-        "Poor people wait until it feels safe. "
-        "By the time it feels safe, all the gains are already gone. "
-        "Stop waiting. Start investing now with whatever you have. "
-        "Even fifty dollars a month invested consistently beats zero every single time."
+        "Rich people buy more when the market drops. "
+        "Poor people sell everything when the market drops. "
+        "One of these groups retires wealthy. The other retires broke. "
+        "Stop analysing. Stop waiting for permission. "
+        "Start investing right now with whatever amount you have available today. "
+        "Even fifty dollars a month invested consistently over thirty years "
+        "grows into something that will change your entire financial life."
     ),
     "passive income": (
         # HOOK
-        "What if you could earn money while you were sleeping, eating, even on holiday. "
+        "What if you could wake up tomorrow and see money in your account that you never worked for. "
         # VALUE
-        "That is exactly what passive income does. "
-        "And it is not a myth or a scam. It is math. "
-        "Dividend stocks pay you cash every single quarter just for owning shares. "
-        "Index funds grow while you sleep, automatically reinvesting your returns. "
-        "Rental properties generate income whether you are working or not. "
-        "None of this happens overnight. "
-        "But every dollar you invest today is a future employee working for you forever. "
+        "That is exactly what passive income does every single day for millions of people. "
+        "And it is not a myth. It is not a get rich quick scam. It is simple mathematics. "
+        "Dividend stocks pay you cash every single quarter just for owning shares in a company. "
+        "You do nothing. The company profits and sends you a cheque automatically. "
+        "Index funds grow while you sleep, automatically reinvesting every return. "
+        "Rental properties generate monthly income whether you show up to work that day or not. "
+        "A YouTube channel earns ad revenue on videos you made years ago. "
+        "None of this happens overnight and none of it is magic. "
+        "But every single dollar you invest today becomes a tiny employee working for you forever. "
         # PAYOFF
-        "The wealthy do not have one income stream. They have five or six. "
-        "Your job pays you once for every hour you work. "
-        "Passive income pays you forever for work you did once. "
-        "Pick one stream this week. Build it for one year. "
-        "Then add another. Your future self will live off what you build today."
+        "The wealthy do not rely on one income stream. They build five or six over time. "
+        "Your job pays you once for every hour of your life that you trade away. "
+        "Passive income pays you forever for work you completed a single time. "
+        "Pick just one stream this week. Build it consistently for one full year. "
+        "Then add another stream on top. "
+        "Your future self will live entirely off the foundation you build starting today."
     ),
     "inflation": (
         # HOOK
-        "Inflation is the most expensive tax that nobody talks about. "
+        "Inflation is the most expensive hidden tax that nobody in school ever taught you about. "
         # VALUE
-        "Seven percent inflation means your money loses half its value in ten years. "
-        "Not because you spent it. Just because you held it. "
-        "A hundred thousand dollars in cash today will only buy "
-        "fifty thousand dollars worth of goods a decade from now. "
-        "The government prints money and your savings silently disappear. "
-        "The wealthy figured this out decades ago. "
-        "That is why they store value in things that rise with inflation. "
-        "Real estate goes up with inflation. Stocks go up with inflation. "
-        "Gold holds its value through inflation. "
+        "Seven percent inflation means your money loses half its entire value in just ten years. "
+        "Not because you spent it badly. Not because you made poor decisions. "
+        "Simply because you held cash instead of assets. "
+        "One hundred thousand dollars sitting in cash today will only buy "
+        "the equivalent of fifty thousand dollars worth of goods a decade from now. "
+        "The government prints more money and your life savings quietly disappear in purchasing power. "
+        "But the wealthy figured this system out decades before you were taught about it. "
+        "That is precisely why they store their value in things that rise alongside inflation. "
+        "Real estate prices go up with inflation every single cycle. "
+        "Stock prices go up with inflation over the long run. "
+        "Gold has held its value against inflation for thousands of years of human history. "
         # PAYOFF
-        "Cash is a melting ice cube. Every day you hold it, it shrinks. "
-        "The rich buy assets. The poor save cash. "
-        "You now know the difference. "
-        "Move your money into assets this week. Even a small amount matters. "
-        "The best protection against inflation is ownership."
+        "Cash is a melting ice cube sitting on your kitchen counter. "
+        "Every single day you hold it in a savings account it is getting smaller in real terms. "
+        "The rich buy assets. The poor and middle class save cash. "
+        "You now understand the difference and that knowledge alone is worth thousands. "
+        "Move your money into real assets this week. Even fifty dollars is a real start. "
+        "The best protection you will ever have against inflation is owning things that inflation drives up."
     ),
     "retire broke": (
         # HOOK
-        "Ninety percent of people will reach sixty five and not be able to retire. "
+        "Ninety percent of people will reach sixty five and discover they cannot afford to retire. "
         # VALUE
         "This is not because they did not work hard enough. "
-        "Most people work harder than any millionaire they know. "
-        "The problem is the system was designed to keep you spending, not saving. "
-        "Advertising tells you to upgrade your car, your phone, your lifestyle. "
-        "Social media shows you what you should be buying right now. "
-        "Banks make more money when you spend than when you save. "
-        "The entire economy runs on your consumption, not your wealth. "
+        "Most of these people worked harder than any millionaire you could name. "
+        "They clocked in forty years of early mornings and late nights. "
+        "The real problem is the system was never designed to make you wealthy. "
+        "It was designed to keep you spending every single dollar you earn. "
+        "Advertising tells you to upgrade your car, your phone, your house, your lifestyle. "
+        "Social media shows you what you should be buying and comparing yourself against. "
+        "Banks earn more profit when you spend than when you save. "
+        "Credit cards charge you twenty percent interest while savings pay you half a percent. "
+        "The entire modern economy is built on your consumption, not your wealth creation. "
+        "And nobody in school ever stopped to explain this system to you. "
         # PAYOFF
-        "Breaking free starts with one decision. "
-        "Pay yourself first before any bill, before any purchase. "
-        "Even ten percent of your income invested every month for thirty years "
-        "will make you wealthier than ninety percent of people you know. "
-        "The retirement you want is built by the choices you make today. "
-        "Start now. Your future self is depending on it."
+        "Breaking free from this cycle starts with a single decision made today. "
+        "Pay yourself first before any bill is paid, before any purchase is made. "
+        "Automate ten percent of every paycheck directly into an investment account. "
+        "Do this every month for thirty years without stopping regardless of the market. "
+        "That simple habit alone will make you wealthier than ninety percent of people you know. "
+        "The comfortable retirement you deserve is built entirely by the small choices you make today. "
+        "Start right now. Your sixty five year old self is depending on the decision you make today."
     ),
     "index funds": (
         # HOOK
@@ -280,7 +304,7 @@ def _claude_script(topic: str, api_key: str) -> str:
     """).strip()
 
     payload = _json.dumps({
-        "model": "claude-haiku-4-5-20251001",
+        "model": "claude-haiku-4-5-20251001",  # fastest + cheapest Anthropic model
         "max_tokens": 300,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
@@ -301,7 +325,7 @@ def _claude_script(topic: str, api_key: str) -> str:
             log.info(f"Claude script: {len(script.split())} words")
             return script
     except Exception as e:
-        log.warning(f"Claude API failed ({e}) — using template")
+        log.warning(f"Anthropic API failed ({e}) — using built-in template (still 160+ words)")
         return _template_script(topic)
 
 
