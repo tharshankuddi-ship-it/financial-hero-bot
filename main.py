@@ -1,25 +1,13 @@
 """
 main.py - Financial Hero Entry Point
-=====================================
-This file is called by GitHub Actions daily.
-It uses pipeline.py for everything — no Gemini, no old scripter.
-
-The pipeline:
-  1. Picks a unique topic (never repeats from used_topics.json)
-  2. Generates a 160-200 word script from built-in templates
-     OR uses Claude AI if ANTHROPIC_API_KEY is set
-  3. Creates voice audio with gTTS (sounds human, free)
-  4. Mixes background music under the voice
-  5. Renders 60s video with changing backgrounds every 10s
-  6. Generates thumbnail
-  7. Uploads to YouTube (+ TikTok/Instagram if configured)
+Called by GitHub Actions daily via: python main.py
 """
 
 import logging
 import os
 import sys
 
-# Add src directory to path
+# pipeline.py lives in the same src/ folder as main.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pipeline import run
@@ -32,11 +20,11 @@ logging.basicConfig(
 
 if __name__ == "__main__":
     run(
-        auto           = True,                              # auto-pick unused topic
-        out_dir        = "/tmp/financial_hero_output",     # temp output folder
-        tts_engine     = "gtts",                           # human-sounding voice
-        add_music      = True,                             # background beat
-        thumb_style    = "split",                          # poor vs rich thumbnail
-        api_key        = os.getenv("ANTHROPIC_API_KEY"),  # optional — better scripts
-        elevenlabs_key = os.getenv("ELEVENLABS_API_KEY"), # optional — better voice
+        auto           = True,
+        out_dir        = "/tmp/financial_hero_output",
+        tts_engine     = "gtts",
+        add_music      = True,
+        thumb_style    = "split",
+        api_key        = os.getenv("ANTHROPIC_API_KEY"),
+        elevenlabs_key = os.getenv("ELEVENLABS_API_KEY"),
     )
