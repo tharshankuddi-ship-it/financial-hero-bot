@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 WIDTH, HEIGHT       = 720, 1280
 FPS                 = 30
-MIN_DURATION        = 0.0       # no minimum — video matches audio length
+MIN_DURATION        = 60.0      # minimum video length in seconds
 SEGMENT_DURATION    = 10.0      # background changes every 10 seconds
 
 FONT_SIZE           = 72
@@ -114,21 +114,54 @@ def render_video(script: str, audio_path: str, output_path: str,
     - Background changes every 10 seconds
     - Each segment uses a visually different clip/query
     """
-    audio    = AudioFileClip(audio_path)
-    duration = max(audio.duration, MIN_DURATION)
+    audio        = AudioFileClip(audio_path)
+    speech_dur   = audio.duration   # actual spoken duration — captions must follow THIS
+    video_dur    = max(speech_dur, MIN_DURATION)
 
-    # Video duration matches audio naturally — no looping
+    # If speech is shorter than 60s, loop audio AND captions together
+    # so they stay in sync across every loop
+    if speech_dur < MIN_DURATION:
+        log.info(f"Audio {speech_dur:.1f}s < 60s — looping audio+captions to fill {MIN_DURATION}s")
+        from moviepy import concatenate_audioclips
+        loops      = int(MIN_DURATION / speech_dur) + 1
+        audio      = concatenate_audioclips([audio] * loops).subclipped(0, MIN_DURATION)
+        # Caption duration = one loop of speech, repeated to fill video
+        caption_loop_dur = speech_dur
+    else:
+        caption_loop_dur = speech_dur
 
-    bg       = _get_segmented_background(duration)
-    font     = _load_font(font_path, FONT_SIZE)
-    captions = _make_caption_clips(script, duration, font, word_timestamps)
-    video    = CompositeVideoClip([bg, *captions], size=(WIDTH, HEIGHT))
-    video    = video.with_audio(audio)
+    bg   = _get_segmented_background(video_dur)
+    font = _load_font(font_path, FONT_SIZE)
+
+    # Build one loop of captions timed to the actual speech duration
+    one_loop_captions = _make_caption_clips(script, caption_loop_dur, font, word_timestamps)
+
+    # If we looped, tile the caption clips to fill the full video duration
+    all_captions = []
+    if video_dur > speech_dur:
+        loops_needed = int(video_dur / speech_dur) + 1
+        for loop_i in range(loops_needed):
+            offset = loop_i * speech_dur
+            if offset >= video_dur:
+                break
+            for clip in one_loop_captions:
+                shifted = clip.with_start(clip.start + offset)
+                # Clamp to video duration
+                if shifted.start >= video_dur:
+                    break
+                end = min(shifted.start + shifted.duration, video_dur)
+                if end > shifted.start:
+                    all_captions.append(shifted.with_duration(end - shifted.start))
+    else:
+        all_captions = one_loop_captions
+
+    video = CompositeVideoClip([bg, *all_captions], size=(WIDTH, HEIGHT))
+    video = video.with_audio(audio)
     video.write_videofile(
         output_path, fps=FPS, codec="libx264",
         audio_codec="aac", preset="fast", logger=None,
     )
-    log.info(f"Video saved -> {output_path}")
+    log.info(f"Video saved -> {output_path} ({video_dur:.1f}s)")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
