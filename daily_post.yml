@@ -33,7 +33,7 @@ jobs:
           pip install moviepy pillow requests numpy gtts
 
       - name: Run pipeline
-        run: python src/main.py
+       run: python src/main.py
         env:
           YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
