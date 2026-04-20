@@ -45,11 +45,15 @@ def run():
         )
 
         log.info("Uploading to YouTube...")
-        title = f"{topic.title()} #Shorts"
+        title = f"{topic.title()} #Shorts #TheFinancialHero"
+        # Use first 2 sentences of script as description for uniqueness
+        sentences = script.split('. ')
+        desc_preview = '. '.join(sentences[:2]) + '.'
         description = (
-            f"Did you know? {script}\n\n"
+            f"{desc_preview}\n\n"
+            "Follow The Financial Hero for daily money tips that could change your life.\n\n"
             "#Shorts #Finance #Money #WealthTips "
-            "#FinancialFreedom #Investing #TheFinancialHero"
+            "#FinancialFreedom #Investing #TheFinancialHero #PersonalFinance #BuildWealth"
         )
         upload_video(video_path, title=title, description=description)
 
