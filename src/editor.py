@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 WIDTH, HEIGHT       = 720, 1280
 FPS                 = 30
-MIN_DURATION        = 60.0      # minimum video length in seconds
+MIN_DURATION        = 0.0       # no minimum — video matches audio length
 SEGMENT_DURATION    = 10.0      # background changes every 10 seconds
 
 FONT_SIZE           = 72
@@ -117,13 +117,7 @@ def render_video(script: str, audio_path: str, output_path: str,
     audio    = AudioFileClip(audio_path)
     duration = max(audio.duration, MIN_DURATION)
 
-    # If audio is shorter than 60s, loop it
-    if audio.duration < MIN_DURATION:
-        log.info(f"Audio {audio.duration:.1f}s < 60s — looping to fill {MIN_DURATION}s")
-        from moviepy import concatenate_audioclips
-        loops  = int(MIN_DURATION / audio.duration) + 1
-        audio  = concatenate_audioclips([audio] * loops).subclipped(0, MIN_DURATION)
-        duration = MIN_DURATION
+    # Video duration matches audio naturally — no looping
 
     bg       = _get_segmented_background(duration)
     font     = _load_font(font_path, FONT_SIZE)
