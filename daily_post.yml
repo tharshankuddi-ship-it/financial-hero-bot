@@ -1,38 +1,52 @@
-name: Daily YouTube Shorts Post
+name: Daily Financial Hero Post
 
 on:
   schedule:
-    - cron: "0 9 * * *"   # 9:00 AM UTC
-    - cron: "0 21 * * *"  # 9:00 PM UTC
-  workflow_dispatch:       # Allow manual trigger from GitHub UI
+    - cron: '0 9 * * *'   # 9am UTC every day
+  workflow_dispatch:       # allow manual trigger from GitHub Actions tab
 
 jobs:
-  post:
+  post-short:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
-      - name: Install system dependencies (ImageMagick for MoviePy)
+      - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick ffmpeg
-          # Allow ImageMagick to read/write files (needed by MoviePy)
-          sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            ffmpeg \
+            espeak-ng \
+            fonts-liberation \
+            fonts-freefont-ttf
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install \
+            moviepy \
+            pillow \
+            requests \
+            numpy \
+            gtts
 
       - name: Run pipeline
+        run: python src/main.py
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-        run: python main.py
+          # YouTube (required)
+          YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN:  ${{ secrets.YT_REFRESH_TOKEN }}
+          # Video backgrounds (free signup at pexels.com and pixabay.com)
+          PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY:   ${{ secrets.PIXABAY_API_KEY }}
+          # AI script generation (optional — templates work fine without this)
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # NOTE: GEMINI_API_KEY is intentionally removed — quota always exhausted
