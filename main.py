@@ -1,13 +1,14 @@
 """
 main.py - Financial Hero Entry Point
-Called by GitHub Actions daily via: python main.py
+Place this file inside the src/ folder alongside pipeline.py
+GitHub Actions runs: python src/main.py
 """
 
 import logging
 import os
 import sys
 
-# pipeline.py lives in the same src/ folder as main.py
+# pipeline.py is in the same src/ folder as this file
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pipeline import run
