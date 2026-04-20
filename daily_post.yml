@@ -31,7 +31,7 @@ jobs:
 
       - name: Run pipeline
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}   # or leave blank if using g4f
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
