@@ -63,79 +63,159 @@ TOPIC_POOL = [
     "Why most people are one paycheck away from financial disaster",
 ]
 
-# ── Script templates keyed by keyword ─────────────────────────────────────────
+# ── Script templates — Hook / Value / Payoff structure (60s minimum) ─────────
+# Format: HOOK (0-5s shock) | VALUE (explain one idea) | PAYOFF (twist + CTA)
 SCRIPT_TEMPLATES = {
     "compound interest": (
-        "Compound interest is the eighth wonder of the world. "
+        # HOOK
+        "Nobody told you this in school and it is costing you thousands every year. "
+        # VALUE
         "If you invest just two hundred dollars a month starting at age twenty five, "
         "by sixty five you will have over six hundred thousand dollars. "
-        "Wait until forty and that number drops to one hundred and fifty thousand. "
-        "The difference is not effort. It is time. "
-        "Your money needs time to grow. Every year you wait costs you thousands. "
-        "Start today. Even small amounts. The clock is already running."
+        "Wait until forty and that number crashes to one hundred and fifty thousand. "
+        "Same money. Same discipline. Completely different result. "
+        "The only difference is time. "
+        "Compound interest doubles your money roughly every seven years. "
+        "That means every ten years you wait cuts your final wealth in half. "
+        # PAYOFF
+        "The wealthy did not get rich by being smarter. "
+        "They got rich by starting earlier. "
+        "You do not need a lot of money to build wealth. "
+        "You need time. And time is the one thing you can never buy back. "
+        "Open an account today. Start with ten dollars. The clock is already running."
     ),
     "savings account": (
-        "Your savings account is lying to you. "
-        "It pays you half a percent while inflation runs at seven percent. "
-        "Every year your money sits there, you lose six and a half percent of its value. "
-        "The bank takes your deposits and invests them for fifteen percent returns. "
-        "They keep the profit and give you almost nothing back. "
-        "Move your money into index funds or high yield accounts. "
-        "Stop letting banks get rich off your savings."
+        # HOOK
+        "Your bank is robbing you in slow motion and you are saying thank you. "
+        # VALUE
+        "Your savings account pays you half a percent interest. "
+        "Inflation is running at seven percent. "
+        "That means every single year you lose six and a half percent of your money. "
+        "Ten thousand dollars in a savings account becomes worth eight thousand "
+        "in purchasing power in just three years. "
+        "Meanwhile the bank takes your deposits and lends them out at twenty percent. "
+        "They pocket the difference and give you almost nothing. "
+        # PAYOFF
+        "The rich do not keep cash in banks. "
+        "They keep it in assets that grow faster than inflation. "
+        "Index funds. Real estate. Gold. Businesses. "
+        "Your money should be working as hard as you do. "
+        "Move it out of savings and into growth. Start today."
     ),
     "investing mistake": (
-        "The biggest investing mistake is waiting until you feel ready. "
-        "Nobody feels ready. The market will always seem too high or too risky. "
-        "But time in the market beats timing the market every single time. "
-        "Missing just the ten best days over twenty years cuts your returns in half. "
-        "Stop watching. Stop waiting. Start with whatever you have. "
-        "Your future self will look back at today as the best day you could have started."
+        # HOOK
+        "Most people make this one investing mistake that costs them their entire retirement. "
+        # VALUE
+        "They wait. They wait for the right time. The right market. The right moment. "
+        "But here is what the data actually shows. "
+        "Missing just the ten best trading days over a twenty year period "
+        "cuts your total returns by more than fifty percent. "
+        "The best days always come right after the worst days. "
+        "The people who panic and sell always miss the recovery. "
+        "Time in the market always beats trying to time the market. "
+        # PAYOFF
+        "Rich people invest when the market is scary. "
+        "Poor people wait until it feels safe. "
+        "By the time it feels safe, all the gains are already gone. "
+        "Stop waiting. Start investing now with whatever you have. "
+        "Even fifty dollars a month invested consistently beats zero every single time."
     ),
     "passive income": (
-        "Passive income is real but almost nobody builds it the right way. "
-        "Dividend stocks pay you every quarter just for owning shares. "
-        "Index funds grow while you sleep. "
-        "Rental income arrives whether you work or not. "
-        "None of these happen overnight. All of them require starting. "
-        "The passive income you enjoy in ten years depends on the choices you make today. "
-        "Pick one stream. Build it consistently. Then add another."
+        # HOOK
+        "What if you could earn money while you were sleeping, eating, even on holiday. "
+        # VALUE
+        "That is exactly what passive income does. "
+        "And it is not a myth or a scam. It is math. "
+        "Dividend stocks pay you cash every single quarter just for owning shares. "
+        "Index funds grow while you sleep, automatically reinvesting your returns. "
+        "Rental properties generate income whether you are working or not. "
+        "None of this happens overnight. "
+        "But every dollar you invest today is a future employee working for you forever. "
+        # PAYOFF
+        "The wealthy do not have one income stream. They have five or six. "
+        "Your job pays you once for every hour you work. "
+        "Passive income pays you forever for work you did once. "
+        "Pick one stream this week. Build it for one year. "
+        "Then add another. Your future self will live off what you build today."
     ),
     "inflation": (
-        "Inflation is a silent tax on everyone who holds cash. "
+        # HOOK
+        "Inflation is the most expensive tax that nobody talks about. "
+        # VALUE
         "Seven percent inflation means your money loses half its value in ten years. "
-        "The wealthy know this. That is why they store value in assets, not bank accounts. "
-        "Real estate. Stocks. Commodities. Things that rise with inflation. "
-        "Cash is a depreciating asset. Treat it like one. "
-        "Spend what you need. Invest the rest immediately. "
-        "Every dollar sitting idle is a dollar slowly disappearing."
+        "Not because you spent it. Just because you held it. "
+        "A hundred thousand dollars in cash today will only buy "
+        "fifty thousand dollars worth of goods a decade from now. "
+        "The government prints money and your savings silently disappear. "
+        "The wealthy figured this out decades ago. "
+        "That is why they store value in things that rise with inflation. "
+        "Real estate goes up with inflation. Stocks go up with inflation. "
+        "Gold holds its value through inflation. "
+        # PAYOFF
+        "Cash is a melting ice cube. Every day you hold it, it shrinks. "
+        "The rich buy assets. The poor save cash. "
+        "You now know the difference. "
+        "Move your money into assets this week. Even a small amount matters. "
+        "The best protection against inflation is ownership."
     ),
     "retire broke": (
-        "Most people will work forty years and retire with almost nothing. "
-        "Not because they did not earn enough. "
-        "Because nobody taught them how money actually works. "
-        "The wealthy pay themselves first before any bill is paid. "
-        "They invest automatically every single month without thinking about it. "
-        "They let compounding do the work over decades. "
-        "You do not need to be rich to start. You need to start to become rich."
+        # HOOK
+        "Ninety percent of people will reach sixty five and not be able to retire. "
+        # VALUE
+        "This is not because they did not work hard enough. "
+        "Most people work harder than any millionaire they know. "
+        "The problem is the system was designed to keep you spending, not saving. "
+        "Advertising tells you to upgrade your car, your phone, your lifestyle. "
+        "Social media shows you what you should be buying right now. "
+        "Banks make more money when you spend than when you save. "
+        "The entire economy runs on your consumption, not your wealth. "
+        # PAYOFF
+        "Breaking free starts with one decision. "
+        "Pay yourself first before any bill, before any purchase. "
+        "Even ten percent of your income invested every month for thirty years "
+        "will make you wealthier than ninety percent of people you know. "
+        "The retirement you want is built by the choices you make today. "
+        "Start now. Your future self is depending on it."
     ),
     "index funds": (
-        "Index funds have quietly outperformed ninety percent of professional fund managers. "
-        "Warren Buffett has publicly recommended them for average investors. "
-        "They are diversified, low cost, and require zero expertise to use. "
-        "You invest in the entire market instead of betting on one company. "
-        "When the economy grows, you grow with it automatically. "
-        "Stop picking individual stocks. Start buying the whole market. "
-        "Boring investing is almost always the most profitable kind."
+        # HOOK
+        "Warren Buffett told ordinary people exactly how to beat most professional investors. "
+        # VALUE
+        "He said buy a simple index fund and hold it forever. "
+        "An index fund buys every major company in the market at once. "
+        "When the economy grows, you grow. When big companies profit, you profit. "
+        "The average index fund returns ten percent per year over the long term. "
+        "Ninety percent of professional fund managers cannot beat that. "
+        "And they charge you two percent a year trying. "
+        "An index fund charges you point zero three percent. "
+        "That difference in fees alone costs investors hundreds of thousands of dollars "
+        "over a lifetime. "
+        # PAYOFF
+        "The most boring investing strategy is the most profitable one. "
+        "You do not need to pick stocks. You do not need to watch charts. "
+        "You need to buy the whole market every month and wait. "
+        "Boring beats exciting in investing every single time. "
+        "Start with any amount. The market does not care how much you start with."
     ),
     "default": (
-        "Most people will never be wealthy. Not because they do not work hard. "
-        "But because nobody taught them the rules of money. "
-        "Rule one: pay yourself first. Before bills, before spending, invest something. "
-        "Rule two: buy assets not liabilities. Assets put money in your pocket. "
-        "Rule three: let time and compounding do the heavy lifting. "
-        "You do not need to be rich to start investing. "
-        "But you need to start investing to become rich. "
-        "The best time was yesterday. The next best time is right now."
+        # HOOK
+        "Poor people buy things. Rich people buy assets. That one difference changes everything. "
+        # VALUE
+        "A liability takes money out of your pocket every month. "
+        "A new car, a designer bag, the latest phone. "
+        "These things feel good to buy but they make you poorer every single day. "
+        "An asset puts money into your pocket every month. "
+        "Stocks, rental properties, businesses, index funds. "
+        "These things might feel boring to buy but they make you richer every single day. "
+        "The wealthy spend their money on things that generate more money. "
+        "The poor spend their money on things that generate more debt. "
+        # PAYOFF
+        "You do not need to be rich to start buying assets. "
+        "You can buy fractional shares in great companies for as little as one dollar. "
+        "Every dollar you redirect from a liability to an asset changes your financial future. "
+        "The best time to start was the day you got your first paycheck. "
+        "The second best time is right now. "
+        "Follow this channel for more wealth building strategies every single day."
     ),
 }
 
@@ -473,10 +553,29 @@ def run(
                  output_path=paths["video"], font_path=font_path)
     video_mb = os.path.getsize(paths["video"]) / 1024 / 1024
 
-    log.info("━━ 4/4 Thumbnail")
+    log.info("━━ 4/5 Thumbnail")
     from editor import generate_thumbnail
     generate_thumbnail(title=topic, output_path=paths["thumbnail"],
                        style=thumb_style, seed=thumb_seed)
+
+    # ── 5. Duplicate check — skip upload if same topic posted recently ──────────
+    log.info("━━ 5/5 Duplicate check + Upload")
+    if _is_duplicate_title(topic, out_dir):
+        log.warning(f"DUPLICATE: '{topic}' was recently posted — skipping upload")
+        paths["uploads"] = {"all": "skipped — duplicate topic"}
+    else:
+        _record_posted_title(topic, out_dir)
+        try:
+            from uploader import upload_everywhere
+            upload_results = upload_everywhere(
+                video_path  = paths["video"],
+                title       = topic,
+                description = script[:200],
+            )
+            paths["uploads"] = upload_results
+        except Exception as e:
+            log.warning(f"Upload step failed: {e}")
+            paths["uploads"] = {}
 
     elapsed = time.time() - t0
     _print_summary(topic, paths, duration, video_mb, elapsed)
@@ -493,12 +592,49 @@ def _print_summary(topic, paths, duration, video_mb, elapsed):
     for icon, label, key in [("📝","Script   ","script"),("🔊","Audio    ","audio"),
                                ("🎬","Video    ","video"),("🖼 ","Thumbnail","thumbnail")]:
         print(f"  {icon} {label}: {paths[key]}")
+    uploads = paths.get("uploads", {})
+    if uploads:
+        print("─" * 60)
+        print("  🌍 Uploads:")
+        for platform, result in uploads.items():
+            icon = "✅" if result.startswith("http") else ("⏭ " if "skipped" in result else "❌")
+            print(f"     {icon} {platform.upper()}: {result}")
     print("═" * 60 + "\n")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CLI
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+def _is_duplicate_title(topic: str, out_dir: str) -> bool:
+    """Return True if this topic was posted in the last 30 videos."""
+    history_file = os.path.join(out_dir, "posted_titles.json")
+    if not os.path.exists(history_file):
+        return False
+    try:
+        with open(history_file) as f:
+            history = json.load(f)
+        return topic.lower().strip() in [t.lower().strip() for t in history[-30:]]
+    except Exception:
+        return False
+
+
+def _record_posted_title(topic: str, out_dir: str):
+    """Append topic to posted history file."""
+    history_file = os.path.join(out_dir, "posted_titles.json")
+    history = []
+    if os.path.exists(history_file):
+        try:
+            with open(history_file) as f:
+                history = json.load(f)
+        except Exception:
+            pass
+    history.append(topic)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(history_file, "w") as f:
+        json.dump(history[-100:], f, indent=2)
+
 
 def main():
     p = argparse.ArgumentParser(
