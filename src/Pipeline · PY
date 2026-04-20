@@ -61,6 +61,17 @@ TOPIC_POOL = [
     "The tax strategies the wealthy use that most people ignore",
     "How to negotiate a raise and invest the difference",
     "Why most people are one paycheck away from financial disaster",
+    # 10 new viral scripts added
+    "Why you are still broke even though you work every day",
+    "Why saving money will never make you rich",
+    "Why most people are trapped in the paycheck cycle",
+    "The difference between rich and poor thinking",
+    "How small daily habits control your financial future",
+    "Why comfort is quietly destroying your future",
+    "Stop waiting for the perfect time to start investing",
+    "Why discipline beats motivation every single time",
+    "How your lifestyle is keeping you broke",
+    "How to change your life with small daily actions",
 ]
 
 # ── Script templates — Hook / Value / Payoff structure (60s minimum) ─────────
@@ -220,6 +231,194 @@ SCRIPT_TEMPLATES = {
         "You need to buy the whole market every month and wait. "
         "Boring beats exciting in investing every single time. "
         "Start with any amount. The market does not care how much you start with."
+    ),
+
+    "still broke": (
+        "Why are you still broke even though you are working every single day. "
+        "It is not your job. It is not your salary. It is your habits. "
+        "Think about it. Every day you make small decisions with money. "
+        "Coffee. Subscriptions. Random spending. Takeaway food. "
+        "Individually they seem small and harmless. "
+        "But over time they quietly control your entire financial life. "
+        "Now flip it around completely. "
+        "What if instead of spending first every month, you invested first. "
+        "Even ten dollars. Even twenty dollars. Invested consistently every single week. "
+        "That money starts to grow. Then it grows faster. Then it compounds. "
+        "That is the real difference between people who build wealth and people who stay stuck. "
+        "Poor habits keep you exactly where you are right now. "
+        "Smart habits build the future you actually want. "
+        "You do not need more money. You need better decisions with the money you already have. "
+        "One small change repeated every day for a year will shock you with the results. "
+        "Follow this channel right now if you are ready to stop staying broke and start building something real."
+    ),
+    "saving vs investing": (
+        "Saving money will not make you rich. And most people never figure this out. "
+        "Saving feels safe. It feels responsible. You put money aside and the number goes up. "
+        "But here is the real problem that nobody explains to you. "
+        "Inflation slowly eats every dollar you save. "
+        "So even though your savings number grows every month, "
+        "your actual purchasing power quietly shrinks. "
+        "A hundred dollars today buys less than a hundred dollars did five years ago. "
+        "And five years from now it will buy even less than today. "
+        "Now look at what investing actually does instead. "
+        "Your money works for you every single day. "
+        "It grows in the stock market. It compounds on top of itself over time. "
+        "It generates dividends and returns while you sleep. "
+        "That is why wealthy people do not just save their money. "
+        "They invest it into assets that grow faster than inflation every single year. "
+        "Saving protects your money from being spent. Investing multiplies it beyond inflation. "
+        "You need both but you cannot stop at saving. "
+        "Follow now for simple and practical ways to start investing even with a small amount."
+    ),
+    "paycheck trap": (
+        "Most people are completely trapped and they do not even realise it. "
+        "Work. Get paid. Spend it all. Repeat next month. "
+        "That is the cycle. And for most people it never changes. "
+        "No growth. No savings. No freedom. No progress. "
+        "You are trading the most valuable hours of your life for money "
+        "that disappears before the next paycheck arrives. "
+        "And this repeats every single month for forty years. "
+        "Meanwhile wealthy people do something completely different. "
+        "They use money to buy assets. "
+        "Stocks that pay dividends. Properties that generate rent. "
+        "Businesses that earn without them being present. "
+        "These assets pay them money even when they are not working. "
+        "Even when they are asleep. Even when they are on holiday. "
+        "That is the real difference that nobody teaches you in school. "
+        "If you only work for money, you will always need to keep working forever. "
+        "The goal is to build things that work for you instead. "
+        "Follow this channel right now if you want to start escaping the paycheck cycle."
+    ),
+    "rich vs poor thinking": (
+        "The difference between rich and poor is not luck. It is thinking. "
+        "A poor mindset looks at something and asks how much does this cost. "
+        "A rich mindset looks at the same thing and asks how much will this make me. "
+        "One mindset focuses entirely on spending. "
+        "The other mindset focuses entirely on return on investment. "
+        "Same world. Same opportunities. Completely different decisions every single day. "
+        "Poor thinking says I cannot afford this. "
+        "Rich thinking asks how can I afford this and what do I need to learn or build. "
+        "Poor thinking buys the newest phone to look successful. "
+        "Rich thinking invests that same money into assets that generate more money. "
+        "And those decisions compound over ten years into completely different lives. "
+        "The person who changed their thinking ten years ago is financially free today. "
+        "The person who never changed it is still working for the same paycheck. "
+        "Change the way you think about money right now. "
+        "And you will change every financial decision you make from this moment forward. "
+        "Follow this channel today to start thinking the way wealthy people actually think."
+    ),
+    "small habits": (
+        "Your entire financial life is built by small daily habits. "
+        "Not by one big decision. Not by one lucky break. By what you do every single day. "
+        "What you do daily matters one hundred times more than what you do occasionally. "
+        "Spend ten dollars every day on things that disappear. "
+        "That is three thousand six hundred dollars gone every single year. "
+        "Invest ten dollars every single day into assets instead. "
+        "Over ten years at average market returns that becomes over fifty thousand dollars. "
+        "Same ten dollars. Completely opposite outcome. "
+        "The only variable is the habit attached to that money. "
+        "Consistency beats intensity every single time in building wealth. "
+        "You do not need one massive financial move to change your life. "
+        "You need small actions repeated without stopping day after day after day. "
+        "The person who invests a little every day for thirty years "
+        "will always end up wealthier than the person who invests a lot occasionally. "
+        "Small habits today create results tomorrow that will genuinely shock you. "
+        "Follow now and build the daily habits that will change your financial future."
+    ),
+    "comfort is costing you": (
+        "Comfort is quietly and slowly destroying your financial future right now. "
+        "And the worst part is it feels completely fine while it happens. "
+        "Easy choices feel good in the moment. "
+        "Scrolling instead of learning. Spending instead of investing. "
+        "Avoiding hard decisions instead of making them. "
+        "But every easy comfortable choice has a hidden cost you pay later. "
+        "Every hour spent scrolling is an hour not spent building skills that pay more. "
+        "Every comfortable purchase is money not compounding in an investment account. "
+        "Discipline feels genuinely hard today. It feels uncomfortable and inconvenient. "
+        "But discipline creates the freedom that comfort promises but never actually delivers. "
+        "The people living the most comfortable and free lives right now "
+        "chose discipline over comfort years ago when it was difficult. "
+        "The people who always chose comfort are still trapped in the same cycle. "
+        "Comfort now equals struggle later every single time. "
+        "Discipline now equals freedom later every single time. "
+        "You get to choose every single day which path you walk. "
+        "Follow this channel and choose discipline starting today."
+    ),
+    "stop waiting": (
+        "Stop waiting for the perfect time to start investing. It does not exist. "
+        "There is no perfect moment that is ever going to arrive and tell you it is ready. "
+        "You will always feel slightly unready. You will always have some doubt. "
+        "The market will always look slightly uncertain from where you are standing. "
+        "But waiting does not improve your financial situation. Action does. "
+        "Every single successful investor started when they did not feel completely ready. "
+        "They started messy. They started small. They started unsure. They started anyway. "
+        "And the ones who started at twenty five with nothing "
+        "are the ones who are financially free at fifty. "
+        "The ones who waited until they felt ready never started at all. "
+        "Every single year you wait to invest costs you years of compound growth forever. "
+        "You cannot get that time back. You cannot pay for it later. "
+        "The best investment you will ever make is starting right now with whatever you have. "
+        "Ten dollars. Twenty dollars. Any amount is better than zero. "
+        "The longer you wait the further behind you fall compared to where you could be. "
+        "Follow right now and start today instead of waiting for tomorrow."
+    ),
+    "discipline beats motivation": (
+        "Motivation is completely unreliable and you need to stop depending on it. "
+        "Some days you wake up feeling ready to change everything about your finances. "
+        "Most days you wake up feeling tired and unmotivated and like none of it matters. "
+        "That is completely normal. Every successful person feels this way too. "
+        "The difference is they act anyway. "
+        "Discipline does not care about your mood or how you feel this morning. "
+        "Discipline shows up on the days motivation disappeared. "
+        "It cares only about the action that needs to happen regardless of feeling. "
+        "The person who invests every month only when motivated ends up investing rarely. "
+        "The person who automates their investment and acts every month regardless "
+        "builds wealth consistently whether they feel like it or not. "
+        "Successful wealthy people are not more motivated than you. "
+        "They are simply more disciplined than they are emotional about money. "
+        "They built systems so that the right action happens automatically. "
+        "Discipline beats motivation in finance every single time without exception. "
+        "Build the systems. Automate the habits. Remove the emotion from the decision. "
+        "Follow now for the practical systems that make discipline automatic."
+    ),
+    "lifestyle trap": (
+        "Your lifestyle upgrades are keeping you broke and you do not realise it. "
+        "Every time your income goes up, your spending goes up with it. "
+        "Better phone. Newer car. Bigger apartment. More expensive clothes and food. "
+        "This is called lifestyle inflation and it silently destroys wealth building. "
+        "You earn more every year but you never actually get ahead. "
+        "Because every raise gets absorbed immediately by a bigger lifestyle. "
+        "You look successful from the outside. "
+        "The car. The clothes. The restaurant photos. "
+        "But your bank account tells a completely different story. "
+        "Real wealth is quiet. Real wealth is invisible. "
+        "Real wealth is the investment account nobody can see "
+        "growing by thousands every single month. "
+        "The truly wealthy people you admire often drive older cars and live in modest homes. "
+        "Because they chose assets over appearances decades ago. "
+        "Looking rich is not the same as being rich. "
+        "Looking rich actually prevents you from ever becoming truly rich. "
+        "Keep your lifestyle flat. Invest every raise. Build real invisible wealth. "
+        "Follow now to learn how to build wealth that is real and not just visible."
+    ),
+    "change your life": (
+        "You want to change your financial life. Here is exactly how you actually do it. "
+        "Stop waiting for one massive life changing moment to arrive. "
+        "Stop waiting for a windfall or a lucky break or a perfect opportunity. "
+        "Focus entirely on small consistent actions repeated every single day. "
+        "Wake up thirty minutes earlier to learn about investing and finance. "
+        "Spend ten dollars less today than you spent yesterday. "
+        "Invest one percent more of your income this month than last month. "
+        "Learn one new thing about money every single week without stopping. "
+        "These actions seem tiny and almost meaningless in isolation. "
+        "But repeated every day for one year they compound into something real. "
+        "Repeated for five years they become transformational. "
+        "Repeated for ten years they become the financial freedom you keep dreaming about. "
+        "Transformation in finance does not happen overnight from one big decision. "
+        "It happens over time from thousands of small right decisions made consistently. "
+        "You already know what the right small actions are. "
+        "The only question is whether you will start taking them today. "
+        "Follow this channel right now. Your future self will genuinely thank you for it."
     ),
     "default": (
         # HOOK
