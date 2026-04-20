@@ -13,8 +13,8 @@ log = logging.getLogger(__name__)
 
 # Pick any voice from: `edge-tts --list-voices`
 VOICE = "en-US-GuyNeural"          # male, natural, works great for facts
-RATE  = "+25%"                     # faster = more energetic, fits Shorts style
-PITCH = "+0Hz"
+RATE  = "+35%"                     # fast energetic pace for Shorts
+PITCH = "+2Hz"                     # slightly higher = more energy
 
 
 def generate_audio(script: str, output_path: str) -> None:
