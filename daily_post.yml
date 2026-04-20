@@ -29,15 +29,14 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install --upgrade pip
-          pip install moviepy pillow requests numpy gtts
+          pip install moviepy pillow requests numpy edge-tts google-auth-oauthlib google-api-python-client
 
       - name: Run pipeline
-        run: python src/main.py
+        run: python main.py
         env:
           YT_CLIENT_ID:      ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET:  ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN:  ${{ secrets.YT_REFRESH_TOKEN }}
+          GEMINI_API_KEY:    ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY:    ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY:   ${{ secrets.PIXABAY_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
