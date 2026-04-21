@@ -10,11 +10,19 @@ Major upgrades in this version:
   6. Duplicate visual check     — logs used video IDs to avoid reusing same clip
 """
 
-import logging, textwrap, os, requests, tempfile, io, json, hashlib
+import logging, textwrap, os, requests, tempfile, io, json, hashlib, random
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy import (AudioFileClip, CompositeVideoClip, ImageClip,
-                     VideoFileClip, concatenate_videoclips)
+from moviepy import (AudioFileClip, CompositeAudioClip, CompositeVideoClip,
+                     ImageClip, VideoFileClip, concatenate_videoclips)
+
+# Free CC0 background music from Pixabay
+MUSIC_URLS = [
+    "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3",
+    "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3",
+    "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3",
+    "https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3",
+]
 
 log = logging.getLogger(__name__)
 
@@ -133,18 +141,17 @@ def render_video(script: str, audio_path: str, output_path: str,
     """
     Render a captioned short-form video.
     - Background changes every 10 seconds
-    - Each segment uses a visually different clip/query
     - Background music mixed quietly under voice
     """
-    voice        = AudioFileClip(audio_path)
-    speech_dur   = voice.duration
-    video_dur    = speech_dur
+    voice      = AudioFileClip(audio_path)
+    speech_dur = voice.duration
+    video_dur  = speech_dur
 
     # Mix background music under voice
-    final_audio  = _mix_background_music(voice, speech_dur)
+    final_audio = _mix_music(voice, speech_dur)
 
-    bg   = _get_segmented_background(video_dur)
-    font = _load_font(font_path, FONT_SIZE)
+    bg           = _get_segmented_background(video_dur)
+    font         = _load_font(font_path, FONT_SIZE)
     all_captions = _make_caption_clips(script, speech_dur, font, word_timestamps)
 
     video = CompositeVideoClip([bg, *all_captions], size=(WIDTH, HEIGHT))
@@ -156,41 +163,26 @@ def render_video(script: str, audio_path: str, output_path: str,
     log.info(f"Video saved -> {output_path} ({video_dur:.1f}s)")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Background music — free CC0 tracks mixed at low volume
-# ══════════════════════════════════════════════════════════════════════════════
-
-BACKGROUND_MUSIC_URLS = [
-    "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3",
-]
-
-def _mix_background_music(voice_audio, duration: float):
-    """Download a random free CC0 track and mix quietly under the voice."""
-    import random, tempfile
+def _mix_music(voice_audio, duration: float):
+    """Download a random free CC0 track and mix at 8% volume under voice."""
     try:
-        url  = random.choice(BACKGROUND_MUSIC_URLS)
+        url  = random.choice(MUSIC_URLS)
         resp = requests.get(url, timeout=20)
-        if resp.status_code != 200:
-            return voice_audio
+        resp.raise_for_status()
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             f.write(resp.content)
             music_path = f.name
         music = AudioFileClip(music_path)
+        # Loop if shorter than video
         if music.duration < duration:
             from moviepy import concatenate_audioclips
             loops = int(duration / music.duration) + 1
             music = concatenate_audioclips([music] * loops)
         music = music.subclipped(0, duration).multiply_volume(0.08)
-        mixed = CompositeVideoClip([]).audio  # placeholder
-        from moviepy import CompositeAudioClip
-        mixed = CompositeAudioClip([voice_audio, music])
         log.info("Background music mixed ✅")
-        return mixed
+        return CompositeAudioClip([voice_audio, music])
     except Exception as e:
-        log.warning(f"Background music failed ({e}), voice only")
+        log.warning(f"Music failed ({e}), voice only")
         return voice_audio
 
 
