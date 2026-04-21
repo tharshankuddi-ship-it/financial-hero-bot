@@ -11,7 +11,7 @@ import edge_tts
 log = logging.getLogger(__name__)
 
 VOICE = "en-US-GuyNeural"   # male, natural
-RATE  = "+40%"              # fast energetic pace for Shorts
+RATE  = "+20%"              # balanced pace — not too slow, not too fast
 PITCH = "+2Hz"              # slightly higher = more energy
 
 
