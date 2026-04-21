@@ -147,9 +147,7 @@ def render_video(script: str, audio_path: str, output_path: str,
     speech_dur = voice.duration
     video_dur  = speech_dur
 
-    # Mix background music under voice
-    final_audio = _mix_music(voice, speech_dur)
-
+    final_audio  = _mix_music(voice, speech_dur)
     bg           = _get_segmented_background(video_dur)
     font         = _load_font(font_path, FONT_SIZE)
     all_captions = _make_caption_clips(script, speech_dur, font, word_timestamps)
@@ -173,12 +171,12 @@ def _mix_music(voice_audio, duration: float):
             f.write(resp.content)
             music_path = f.name
         music = AudioFileClip(music_path)
-        # Loop if shorter than video
         if music.duration < duration:
             from moviepy import concatenate_audioclips
             loops = int(duration / music.duration) + 1
             music = concatenate_audioclips([music] * loops)
-        music = music.subclipped(0, duration).multiply_volume(0.08)
+        # MoviePy 2.x uses with_volume_scaled() not multiply_volume()
+        music = music.subclipped(0, duration).with_volume_scaled(0.08)
         log.info("Background music mixed ✅")
         return CompositeAudioClip([voice_audio, music])
     except Exception as e:
@@ -186,6 +184,9 @@ def _mix_music(voice_audio, duration: float):
         return voice_audio
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Segmented background — changes every 10 seconds
+# ══════════════════════════════════════════════════════════════════════════════
 
 def _get_segmented_background(total_duration: float):
     """
