@@ -10,19 +10,11 @@ Major upgrades in this version:
   6. Duplicate visual check     — logs used video IDs to avoid reusing same clip
 """
 
-import logging, textwrap, os, requests, tempfile, io, json, hashlib, random
+import logging, textwrap, os, requests, tempfile, io, json, hashlib
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy import (AudioFileClip, CompositeAudioClip, CompositeVideoClip,
-                     ImageClip, VideoFileClip, concatenate_videoclips)
-
-# Free CC0 background music from Pixabay
-MUSIC_URLS = [
-    "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/03/10/audio_c8c8a73467.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1bab.mp3",
-    "https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3",
-]
+from moviepy import (AudioFileClip, CompositeVideoClip, ImageClip,
+                     VideoFileClip, concatenate_videoclips)
 
 log = logging.getLogger(__name__)
 
@@ -140,48 +132,47 @@ def render_video(script: str, audio_path: str, output_path: str,
                  word_timestamps=None):
     """
     Render a captioned short-form video.
+    - Minimum 60 seconds
     - Background changes every 10 seconds
-    - Background music mixed quietly under voice
+    - Each segment uses a visually different clip/query
     """
-    voice      = AudioFileClip(audio_path)
-    speech_dur = voice.duration
-    video_dur  = speech_dur
+    audio        = AudioFileClip(audio_path)
+    speech_dur       = audio.duration   # video length = audio length, no looping
+    video_dur        = speech_dur
+    caption_loop_dur = speech_dur
 
-    final_audio  = _mix_music(voice, speech_dur)
-    bg           = _get_segmented_background(video_dur)
-    font         = _load_font(font_path, FONT_SIZE)
-    all_captions = _make_caption_clips(script, speech_dur, font, word_timestamps)
+    bg   = _get_segmented_background(video_dur)
+    font = _load_font(font_path, FONT_SIZE)
+
+    # Build one loop of captions timed to the actual speech duration
+    one_loop_captions = _make_caption_clips(script, caption_loop_dur, font, word_timestamps)
+
+    # If we looped, tile the caption clips to fill the full video duration
+    all_captions = []
+    if video_dur > speech_dur:
+        loops_needed = int(video_dur / speech_dur) + 1
+        for loop_i in range(loops_needed):
+            offset = loop_i * speech_dur
+            if offset >= video_dur:
+                break
+            for clip in one_loop_captions:
+                shifted = clip.with_start(clip.start + offset)
+                # Clamp to video duration
+                if shifted.start >= video_dur:
+                    break
+                end = min(shifted.start + shifted.duration, video_dur)
+                if end > shifted.start:
+                    all_captions.append(shifted.with_duration(end - shifted.start))
+    else:
+        all_captions = one_loop_captions
 
     video = CompositeVideoClip([bg, *all_captions], size=(WIDTH, HEIGHT))
-    video = video.with_audio(final_audio)
+    video = video.with_audio(audio)
     video.write_videofile(
         output_path, fps=FPS, codec="libx264",
         audio_codec="aac", preset="fast", logger=None,
     )
     log.info(f"Video saved -> {output_path} ({video_dur:.1f}s)")
-
-
-def _mix_music(voice_audio, duration: float):
-    """Download a random free CC0 track and mix at 8% volume under voice."""
-    try:
-        url  = random.choice(MUSIC_URLS)
-        resp = requests.get(url, timeout=20)
-        resp.raise_for_status()
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-            f.write(resp.content)
-            music_path = f.name
-        music = AudioFileClip(music_path)
-        if music.duration < duration:
-            from moviepy import concatenate_audioclips
-            loops = int(duration / music.duration) + 1
-            music = concatenate_audioclips([music] * loops)
-        # MoviePy 2.x uses with_volume_scaled() not multiply_volume()
-        music = music.subclipped(0, duration).with_volume_scaled(0.08)
-        log.info("Background music mixed ✅")
-        return CompositeAudioClip([voice_audio, music])
-    except Exception as e:
-        log.warning(f"Music failed ({e}), voice only")
-        return voice_audio
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -394,20 +385,47 @@ def _download_and_open_video(video_url: str, duration: float):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _make_caption_clips(script, total_duration, font, word_timestamps=None):
-    words  = script.split()
+    words = script.split()
     if not words:
         return []
 
-    chunks        = [words[i:i+WORDS_PER_CHUNK]
-                     for i in range(0, len(words), WORDS_PER_CHUNK)]
-    chunk_duration = total_duration / len(chunks)
+    # Use real word timestamps if available for perfect sync
+    if word_timestamps and len(word_timestamps) >= len(words) * 0.8:
+        return _make_synced_captions(words, word_timestamps, font)
 
+    # Fallback: equal-time chunks
+    chunks         = [words[i:i+WORDS_PER_CHUNK]
+                      for i in range(0, len(words), WORDS_PER_CHUNK)]
+    chunk_duration = total_duration / len(chunks)
     return [
         ImageClip(np.array(_render_caption_frame(words, i * WORDS_PER_CHUNK, font)))
         .with_start(i * chunk_duration)
         .with_duration(chunk_duration)
         for i in range(len(chunks))
     ]
+
+
+def _make_synced_captions(words, timestamps, font):
+    """Build caption clips timed exactly to each spoken word group."""
+    clips  = []
+    n      = len(timestamps)
+    step   = WORDS_PER_CHUNK
+
+    for i in range(0, n, step):
+        group = timestamps[i:i+step]
+        start = group[0]["start"]
+        end   = group[-1]["end"]
+        dur   = max(end - start, 0.05)
+
+        # Find word index in original word list
+        word_idx = i
+        frame = _render_caption_frame(words, word_idx, font)
+        clips.append(
+            ImageClip(np.array(frame))
+            .with_start(start)
+            .with_duration(dur)
+        )
+    return clips
 
 
 def _render_caption_frame(words, highlight_start, font):
