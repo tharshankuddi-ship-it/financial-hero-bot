@@ -1,5 +1,6 @@
 """
 src/tiktok_uploader.py — Upload videos to TikTok via Content Posting API
+Uses inbox/upload (draft) endpoint which works in Sandbox mode.
 """
 import os
 import logging
@@ -19,7 +20,6 @@ def _get_valid_token() -> str:
     if not access_token:
         return None
 
-    # Try refreshing for a fresh token
     try:
         resp = requests.post(
             f"{TIKTOK_API}/oauth/token/",
@@ -51,22 +51,14 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
     file_size = os.path.getsize(video_path)
     log.info(f"Uploading to TikTok: {title[:50]} ({file_size/1024/1024:.1f}MB)")
 
-    # Step 1 — Initialize upload
+    # Step 1 — Initialize upload (inbox/draft endpoint)
     init_resp = requests.post(
-        f"{TIKTOK_API}/post/video/init/",
+        f"{TIKTOK_API}/post/publish/inbox/video/init/",
         headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type":  "application/json; charset=UTF-8",
         },
         json={
-            "post_info": {
-                "title":           title[:150],
-                "privacy_level":   "MUTUAL_FOLLOW_FRIENDS",
-                "disable_duet":    False,
-                "disable_comment": False,
-                "disable_stitch":  False,
-                "video_cover_timestamp_ms": 1000,
-            },
             "source_info": {
                 "source":            "FILE_UPLOAD",
                 "video_size":        file_size,
@@ -83,15 +75,18 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
         log.error(f"TikTok init failed: {init_resp.status_code}")
         return None
 
-    data       = init_resp.json().get("data", {})
+    resp_data  = init_resp.json()
+    data       = resp_data.get("data", {})
     upload_url = data.get("upload_url")
     publish_id = data.get("publish_id")
 
     if not upload_url:
-        log.error(f"No upload_url: {init_resp.json()}")
+        log.error(f"No upload_url: {resp_data}")
         return None
 
-    # Step 2 — Upload video
+    log.info(f"TikTok upload URL received, publish_id={publish_id}")
+
+    # Step 2 — Upload video file
     with open(video_path, "rb") as f:
         video_data = f.read()
 
@@ -106,9 +101,11 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
         timeout=120,
     )
 
+    log.info(f"TikTok upload response: {upload_resp.status_code}")
+
     if upload_resp.status_code not in (200, 201, 206):
         log.error(f"TikTok upload failed: {upload_resp.status_code} {upload_resp.text[:200]}")
         return None
 
-    log.info(f"✅ TikTok upload complete! publish_id={publish_id}")
+    log.info(f"✅ TikTok upload complete! Video sent to inbox. publish_id={publish_id}")
     return publish_id
