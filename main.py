@@ -11,6 +11,7 @@ from scripter import generate_script, pick_topic
 from narrator import generate_audio
 from editor import render_video
 from uploader import upload_video
+from tiktok_uploader import upload_to_tiktok
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +23,6 @@ FONT_PATH = Path("fonts/main.ttf")
 
 
 def quality_check(video_path: str, min_duration=40, max_duration=65) -> bool:
-    """Check video before uploading — returns True if OK."""
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "quiet", "-show_entries",
@@ -31,20 +31,17 @@ def quality_check(video_path: str, min_duration=40, max_duration=65) -> bool:
         )
         duration = float(result.stdout.strip())
         size_mb  = os.path.getsize(video_path) / 1024 / 1024
-
         log.info(f"QC → Duration: {duration:.1f}s | Size: {size_mb:.1f}MB")
-
         if duration < min_duration:
-            log.error(f"QC FAILED: Video too short ({duration:.1f}s < {min_duration}s)")
+            log.error(f"QC FAILED: too short ({duration:.1f}s < {min_duration}s)")
             return False
         if duration > max_duration:
-            log.error(f"QC FAILED: Video too long ({duration:.1f}s > {max_duration}s)")
+            log.error(f"QC FAILED: too long ({duration:.1f}s > {max_duration}s)")
             return False
         if size_mb < 0.5:
-            log.error(f"QC FAILED: File too small ({size_mb:.1f}MB)")
+            log.error(f"QC FAILED: file too small ({size_mb:.1f}MB)")
             return False
-
-        log.info("QC PASSED ✅ — uploading to YouTube")
+        log.info("QC PASSED ✅")
         return True
     except Exception as e:
         log.warning(f"QC check failed ({e}) — uploading anyway")
@@ -75,12 +72,10 @@ def run():
             word_timestamps=timestamps,
         )
 
-        # Quality check before uploading
         if not quality_check(video_path):
             log.error("Video failed quality check — NOT uploading")
             sys.exit(1)
 
-        log.info("Uploading to YouTube...")
         sentences    = script.split('. ')
         desc_preview = '. '.join(sentences[:2]) + '.'
         title        = f"{topic.title()} #Shorts #TheFinancialHero"
@@ -90,7 +85,23 @@ def run():
             "#Shorts #Finance #Money #WealthTips "
             "#FinancialFreedom #Investing #TheFinancialHero #PersonalFinance"
         )
-        upload_video(video_path, title=title, description=description)
+
+        # Upload to YouTube
+        log.info("Uploading to YouTube...")
+        try:
+            upload_video(video_path, title=title, description=description)
+            log.info("✅ YouTube upload done!")
+        except Exception as e:
+            log.error(f"YouTube upload failed: {e}")
+
+        # Upload to TikTok
+        log.info("Uploading to TikTok...")
+        try:
+            tiktok_id = upload_to_tiktok(video_path, title=title)
+            if tiktok_id:
+                log.info(f"✅ TikTok upload done! publish_id={tiktok_id}")
+        except Exception as e:
+            log.error(f"TikTok upload failed: {e}")
 
     log.info("Done! ✅")
 
