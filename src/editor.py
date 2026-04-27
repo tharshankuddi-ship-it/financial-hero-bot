@@ -366,11 +366,21 @@ def _download_and_open_video(video_url: str, duration: float):
         if probe.returncode != 0 or not probe.stdout.strip():
             return None
 
-        raw  = VideoFileClip(tmp_path).without_audio().resized((WIDTH, HEIGHT))
+        # Force resize to 720x1280 using ffmpeg for guaranteed quality
+        resized_path = tmp_path.replace(".mp4", "_resized.mp4")
+        subprocess.run([
+            "ffmpeg", "-i", tmp_path,
+            "-vf", f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,crop={WIDTH}:{HEIGHT}",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-an", "-y", resized_path
+        ], capture_output=True, timeout=60)
+
+        use_path = resized_path if os.path.exists(resized_path) else tmp_path
+        raw  = VideoFileClip(use_path).without_audio()
         clip = (raw.with_duration(duration)
                 if raw.duration < duration
                 else raw.subclipped(0, duration))
-        clip._tmp_path_to_cleanup = tmp_path
+        clip._tmp_path_to_cleanup = use_path
         return clip
     except Exception as e:
         log.warning(f"Video download failed: {e}")
@@ -431,29 +441,45 @@ def _make_synced_captions(words, timestamps, font):
 # ── Trading/Finance emoji symbol mapping ──────────────────────────────────────
 SYMBOL_MAP = [
     (["invest", "investing", "invested", "investment"], "📈"),
-    (["rich", "wealthy", "wealth", "millionaire"], "💰"),
-    (["money", "dollar", "cash", "income", "earn"], "💵"),
-    (["broke", "poor", "debt", "loan", "broke"], "📉"),
-    (["save", "saving", "savings"], "🏦"),
-    (["habit", "habits", "daily", "consistent", "consistency"], "🔄"),
-    (["free", "freedom", "retire", "retirement"], "🏆"),
-    (["stock", "stocks", "market", "index", "fund"], "📊"),
-    (["compound", "compound interest", "compounds"], "⚡"),
-    (["start", "begin", "action", "act", "now"], "🚀"),
-    (["time", "early", "late", "wait", "delay"], "⏰"),
-    (["work", "job", "salary", "paycheck", "wage"], "💼"),
-    (["spend", "spending", "expense", "cost", "buy"], "🛒"),
-    (["asset", "assets", "property", "real estate"], "🏠"),
-    (["bank", "banks", "credit", "card"], "🏛️"),
-    (["grow", "growth", "growing", "profit"], "🌱"),
-    (["win", "winning", "success", "successful"], "✅"),
-    (["lose", "losing", "fail", "failure", "mistake"], "❌"),
-    (["inflation", "inflating"], "🔥"),
-    (["discipline", "disciplined", "consistent"], "💪"),
+    (["rich", "wealthy", "wealth", "millionaire"],      "💰"),
+    (["money", "dollar", "cash", "income", "earn"],     "💵"),
+    (["broke", "poor", "debt", "loan"],                 "📉"),
+    (["save", "saving", "savings"],                     "🏦"),
+    (["habit", "habits", "daily", "consistent"],        "🔄"),
+    (["free", "freedom", "retire", "retirement"],       "🏆"),
+    (["stock", "stocks", "market", "index", "fund"],    "📊"),
+    (["compound", "compounds"],                         "⚡"),
+    (["start", "begin", "action", "act", "now"],        "🚀"),
+    (["time", "early", "late", "wait", "delay"],        "⏰"),
+    (["work", "job", "salary", "paycheck"],             "💼"),
+    (["spend", "spending", "expense"],                  "💸"),
+    (["asset", "assets", "property"],                   "🏠"),
+    (["inflation"],                                     "🔥"),
+    (["discipline", "disciplined"],                     "💪"),
+    (["grow", "growth", "growing", "profit"],           "🌱"),
+    (["win", "success", "successful"],                  "✅"),
+    (["fail", "failure", "mistake"],                    "❌"),
+    (["bank", "banks", "credit"],                       "🏛️"),
 ]
 
+# Emoji font candidates in order of preference
+_EMOJI_FONT_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+    "/usr/share/fonts/noto-color-emoji/NotoColorEmoji.ttf",
+    "/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+]
+
+def _load_emoji_font(size: int = 80):
+    for path in _EMOJI_FONT_PATHS:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size), path
+            except Exception:
+                pass
+    return None, None
+
 def _get_symbol_for_chunk(words_in_chunk: list) -> str:
-    """Return the best matching emoji for a group of words."""
     text = " ".join(words_in_chunk).lower()
     for keywords, emoji in SYMBOL_MAP:
         if any(kw in text for kw in keywords):
@@ -470,7 +496,6 @@ def _render_caption_frame(words, highlight_start, font):
     if not wrapped:
         return Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
 
-    # Get matching symbol for this chunk
     symbol = _get_symbol_for_chunk(chunk)
 
     pos_map = {}
@@ -483,19 +508,25 @@ def _render_caption_frame(words, highlight_start, font):
     base = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(base)
 
-    # Draw symbol above captions if we have one
+    # Draw emoji symbol above captions
     if symbol:
-        try:
-            symbol_font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 80
-            )
-        except Exception:
-            symbol_font = font
-        sym_w = int(draw.textlength(symbol, font=symbol_font))
-        sym_x = (WIDTH - sym_w) // 2
-        sym_y = TEXT_Y_POSITION - 100
-        draw.text((sym_x, sym_y), symbol, font=symbol_font, fill=(255, 220, 0, 255))
+        emoji_font, emoji_path = _load_emoji_font(80)
+        if emoji_font:
+            try:
+                # Use RGBA image for color emoji
+                emoji_img = Image.new("RGBA", (120, 100), (0, 0, 0, 0))
+                emoji_draw = ImageDraw.Draw(emoji_img)
+                emoji_draw.text((10, 5), symbol, font=emoji_font, embedded_color=True)
+                sym_x = (WIDTH - 120) // 2
+                sym_y = TEXT_Y_POSITION - 115
+                base.alpha_composite(emoji_img, (sym_x, sym_y))
+            except Exception as e:
+                # Fallback: gold text tag
+                _draw_text_tag(draw, symbol, font, TEXT_Y_POSITION - 60)
+        else:
+            _draw_text_tag(draw, symbol, font, TEXT_Y_POSITION - 60)
 
+    # Draw caption words
     for li, line in enumerate(wrapped):
         line_words = line.split()
         line_w     = sum(int(draw.textlength(w + " ", font=font)) for w in line_words)
@@ -509,11 +540,30 @@ def _render_caption_frame(words, highlight_start, font):
                 for dy in range(-STROKE_WIDTH, STROKE_WIDTH + 1):
                     if dx == 0 and dy == 0:
                         continue
-                    draw.text((x+dx, yy+dy), word, font=font,
-                              fill=(*STROKE_COLOR, 255))
+                    draw.text((x+dx, yy+dy), word, font=font, fill=(*STROKE_COLOR, 255))
             draw.text((x, yy), word, font=font, fill=color)
             x += int(draw.textlength(word + " ", font=font))
     return base
+
+
+def _draw_text_tag(draw, symbol: str, font, y: int):
+    """Fallback gold pill tag when emoji font unavailable."""
+    try:
+        tag_font = ImageFont.truetype(font.path, 32)
+    except Exception:
+        tag_font = font
+    tag_text = f"  {symbol}  "
+    tag_w    = int(draw.textlength(tag_text, font=tag_font))
+    tag_x    = (WIDTH - tag_w) // 2
+    draw.rounded_rectangle(
+        [tag_x - 8, y - 8, tag_x + tag_w + 8, y + 40],
+        radius=8, fill=(0, 0, 0, 180)
+    )
+    for dx in range(-2, 3):
+        for dy in range(-2, 3):
+            if dx == 0 and dy == 0: continue
+            draw.text((tag_x+dx, y+dy), tag_text, font=tag_font, fill=(0,0,0,255))
+    draw.text((tag_x, y), tag_text, font=tag_font, fill=(255, 215, 0, 255))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
