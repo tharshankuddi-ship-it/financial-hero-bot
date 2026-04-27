@@ -428,6 +428,39 @@ def _make_synced_captions(words, timestamps, font):
     return clips
 
 
+# ── Trading/Finance emoji symbol mapping ──────────────────────────────────────
+SYMBOL_MAP = [
+    (["invest", "investing", "invested", "investment"], "📈"),
+    (["rich", "wealthy", "wealth", "millionaire"], "💰"),
+    (["money", "dollar", "cash", "income", "earn"], "💵"),
+    (["broke", "poor", "debt", "loan", "broke"], "📉"),
+    (["save", "saving", "savings"], "🏦"),
+    (["habit", "habits", "daily", "consistent", "consistency"], "🔄"),
+    (["free", "freedom", "retire", "retirement"], "🏆"),
+    (["stock", "stocks", "market", "index", "fund"], "📊"),
+    (["compound", "compound interest", "compounds"], "⚡"),
+    (["start", "begin", "action", "act", "now"], "🚀"),
+    (["time", "early", "late", "wait", "delay"], "⏰"),
+    (["work", "job", "salary", "paycheck", "wage"], "💼"),
+    (["spend", "spending", "expense", "cost", "buy"], "🛒"),
+    (["asset", "assets", "property", "real estate"], "🏠"),
+    (["bank", "banks", "credit", "card"], "🏛️"),
+    (["grow", "growth", "growing", "profit"], "🌱"),
+    (["win", "winning", "success", "successful"], "✅"),
+    (["lose", "losing", "fail", "failure", "mistake"], "❌"),
+    (["inflation", "inflating"], "🔥"),
+    (["discipline", "disciplined", "consistent"], "💪"),
+]
+
+def _get_symbol_for_chunk(words_in_chunk: list) -> str:
+    """Return the best matching emoji for a group of words."""
+    text = " ".join(words_in_chunk).lower()
+    for keywords, emoji in SYMBOL_MAP:
+        if any(kw in text for kw in keywords):
+            return emoji
+    return ""
+
+
 def _render_caption_frame(words, highlight_start, font):
     chunk   = words[highlight_start: highlight_start + WORDS_PER_CHUNK]
     if not chunk:
@@ -436,6 +469,9 @@ def _render_caption_frame(words, highlight_start, font):
     wrapped = textwrap.wrap(" ".join(chunk), width=WRAP_CHARS)
     if not wrapped:
         return Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+
+    # Get matching symbol for this chunk
+    symbol = _get_symbol_for_chunk(chunk)
 
     pos_map = {}
     gi = 0
@@ -446,6 +482,19 @@ def _render_caption_frame(words, highlight_start, font):
 
     base = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(base)
+
+    # Draw symbol above captions if we have one
+    if symbol:
+        try:
+            symbol_font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 80
+            )
+        except Exception:
+            symbol_font = font
+        sym_w = int(draw.textlength(symbol, font=symbol_font))
+        sym_x = (WIDTH - sym_w) // 2
+        sym_y = TEXT_Y_POSITION - 100
+        draw.text((sym_x, sym_y), symbol, font=symbol_font, fill=(255, 220, 0, 255))
 
     for li, line in enumerate(wrapped):
         line_words = line.split()
