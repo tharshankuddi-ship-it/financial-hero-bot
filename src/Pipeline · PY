@@ -608,7 +608,7 @@ def _generate_bg_music(duration: float, output_path: str, volume: float = 0.08) 
 
 
 def _mix_audio(voice_path: str, music_path: str,
-               output_path: str, music_vol: float = 0.10) -> str:
+               output_path: str, music_vol: float = 0.05) -> str:
     """Mix voice (full vol) + background music (ducked to music_vol)."""
     r = subprocess.run([
         "ffmpeg", "-y",
