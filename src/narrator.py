@@ -9,7 +9,7 @@ import edge_tts
 log = logging.getLogger(__name__)
 
 VOICE = "en-US-GuyNeural"
-RATE  = "+5%"
+RATE  = "+18%"              # natural energetic pace — not too slow, not too fast
 PITCH = "+2Hz"
 
 
