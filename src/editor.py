@@ -470,11 +470,12 @@ _EMOJI_FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
 
-def _load_emoji_font(size: int = 80):
+def _load_emoji_font(size: int = 109):
+    # NotoColorEmoji is a fixed-size font — must use 109
     for path in _EMOJI_FONT_PATHS:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, size), path
+                return ImageFont.truetype(path, 109), path
             except Exception:
                 pass
     return None, None
@@ -510,18 +511,18 @@ def _render_caption_frame(words, highlight_start, font):
 
     # Draw emoji symbol above captions
     if symbol:
-        emoji_font, emoji_path = _load_emoji_font(80)
+        emoji_font, emoji_path = _load_emoji_font()
         if emoji_font:
             try:
-                # Use RGBA image for color emoji
-                emoji_img = Image.new("RGBA", (120, 100), (0, 0, 0, 0))
+                emoji_img  = Image.new("RGBA", (140, 130), (0, 0, 0, 0))
                 emoji_draw = ImageDraw.Draw(emoji_img)
-                emoji_draw.text((10, 5), symbol, font=emoji_font, embedded_color=True)
-                sym_x = (WIDTH - 120) // 2
-                sym_y = TEXT_Y_POSITION - 115
+                emoji_draw.text((10, 10), symbol, font=emoji_font, embedded_color=True)
+                sym_x = (WIDTH - 140) // 2
+                sym_y = TEXT_Y_POSITION - 140
                 base.alpha_composite(emoji_img, (sym_x, sym_y))
+                log.debug(f"Emoji rendered: {symbol}")
             except Exception as e:
-                # Fallback: gold text tag
+                log.warning(f"Emoji render failed ({e}), using text tag")
                 _draw_text_tag(draw, symbol, font, TEXT_Y_POSITION - 60)
         else:
             _draw_text_tag(draw, symbol, font, TEXT_Y_POSITION - 60)
