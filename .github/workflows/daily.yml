@@ -23,7 +23,15 @@ jobs:
           fc-cache -fv
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt PyNaCl
+
+      - name: Refresh TikTok token
+        env:
+          TIKTOK_CLIENT_KEY:    ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+          GH_PAT:               ${{ secrets.GH_PAT }}
+        run: python refresh_tiktok_token.py
 
       - name: Download font
         run: |
