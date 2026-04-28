@@ -1,22 +1,21 @@
 """
 refresh_tiktok_token.py
-Runs in GitHub Actions BEFORE main.py to auto-refresh the TikTok token
-and update the GitHub Secret automatically.
+Auto-refreshes TikTok token before each run.
+Never crashes the pipeline even if refresh fails.
 """
 import os
 import sys
 import requests
-import json
 
 CLIENT_KEY    = os.getenv("TIKTOK_CLIENT_KEY", "sbawgs3smrwhcdgcu8")
 CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET", "RanP8eBukOuvSVyQrgGJxQL9pTpzvFwv")
 REFRESH_TOKEN = os.getenv("TIKTOK_REFRESH_TOKEN")
 GH_TOKEN      = os.getenv("GH_PAT")
-GH_REPO       = os.getenv("GITHUB_REPOSITORY")  # auto set by Actions
+GH_REPO       = os.getenv("GITHUB_REPOSITORY")
 
 def refresh_tiktok():
     if not REFRESH_TOKEN:
-        print("No TIKTOK_REFRESH_TOKEN — skipping refresh")
+        print("No TIKTOK_REFRESH_TOKEN — skipping TikTok refresh")
         return
 
     resp = requests.post(
@@ -35,28 +34,31 @@ def refresh_tiktok():
 
     if "access_token" not in data:
         print(f"Refresh failed: {data}")
-        sys.exit(1)
+        print("WARNING: TikTok token expired. YouTube upload will still proceed.")
+        print("Run get_tiktok_token.py locally to get a new token.")
+        return  # Non-fatal — pipeline continues for YouTube
 
     new_access  = data["access_token"]
     new_refresh = data.get("refresh_token", REFRESH_TOKEN)
     print(f"New access token: {new_access[:20]}...")
 
-    # Update GitHub Secrets via API
+    # Write to GITHUB_ENV so the next step can use it
+    gh_env = os.environ.get("GITHUB_ENV", "")
+    if gh_env:
+        with open(gh_env, "a") as f:
+            f.write(f"TIKTOK_ACCESS_TOKEN={new_access}\n")
+            f.write(f"TIKTOK_REFRESH_TOKEN={new_refresh}\n")
+        print("Tokens written to GITHUB_ENV ✅")
+
+    # Also update GitHub Secrets if GH_PAT available
     if GH_TOKEN and GH_REPO:
         _update_github_secret("TIKTOK_ACCESS_TOKEN",  new_access,  GH_TOKEN, GH_REPO)
         _update_github_secret("TIKTOK_REFRESH_TOKEN", new_refresh, GH_TOKEN, GH_REPO)
-    else:
-        print("No GH_PAT set — writing tokens to env file instead")
-        with open(os.environ.get("GITHUB_ENV", "/dev/stdout"), "a") as f:
-            f.write(f"TIKTOK_ACCESS_TOKEN={new_access}\n")
-            f.write(f"TIKTOK_REFRESH_TOKEN={new_refresh}\n")
 
-    print("TikTok token refreshed successfully ✅")
+    print("TikTok token refreshed ✅")
 
 
 def _update_github_secret(name, value, token, repo):
-    """Update a GitHub Actions secret via the API."""
-    # Get repo public key for encryption
     key_resp = requests.get(
         f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
         headers={"Authorization": f"token {token}",
@@ -66,11 +68,7 @@ def _update_github_secret(name, value, token, repo):
     key_data = key_resp.json()
     key_id   = key_data["key_id"]
     pub_key  = key_data["key"]
-
-    # Encrypt the secret value
     encrypted = _encrypt_secret(pub_key, value)
-
-    # Update the secret
     update_resp = requests.put(
         f"https://api.github.com/repos/{repo}/actions/secrets/{name}",
         headers={"Authorization": f"token {token}",
@@ -85,19 +83,12 @@ def _update_github_secret(name, value, token, repo):
 
 
 def _encrypt_secret(public_key_b64: str, secret_value: str) -> str:
-    """Encrypt secret using repo's public key (libsodium)."""
     from base64 import b64decode, b64encode
-    try:
-        from nacl import encoding, public
-        pub_key = public.PublicKey(
-            b64decode(public_key_b64), encoding.RawEncoder
-        )
-        box       = public.SealedBox(pub_key)
-        encrypted = box.encrypt(secret_value.encode("utf-8"))
-        return b64encode(encrypted).decode("utf-8")
-    except ImportError:
-        print("PyNaCl not installed — install with: pip install PyNaCl")
-        sys.exit(1)
+    from nacl import encoding, public
+    pub_key   = public.PublicKey(b64decode(public_key_b64), encoding.RawEncoder)
+    box       = public.SealedBox(pub_key)
+    encrypted = box.encrypt(secret_value.encode("utf-8"))
+    return b64encode(encrypted).decode("utf-8")
 
 
 if __name__ == "__main__":
