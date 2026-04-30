@@ -1,6 +1,6 @@
 """
-src/tiktok_uploader.py — Upload videos to TikTok via Content Posting API
-Uses inbox/upload (draft) endpoint which works in Sandbox mode.
+src/tiktok_uploader.py — Upload & auto-publish videos to TikTok
+Uses content posting API with auto-publish + caption
 """
 import os
 import logging
@@ -42,7 +42,8 @@ def _get_valid_token() -> str:
     return access_token
 
 
-def upload_to_tiktok(video_path: str, title: str) -> str:
+def upload_to_tiktok(video_path: str, title: str, description: str = "") -> str:
+    """Upload video to TikTok and auto-publish with caption."""
     access_token = _get_valid_token()
     if not access_token:
         log.warning("TIKTOK_ACCESS_TOKEN not set — skipping TikTok upload")
@@ -51,9 +52,9 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
     file_size = os.path.getsize(video_path)
     log.info(f"Uploading to TikTok: {title[:50]} ({file_size/1024/1024:.1f}MB)")
 
-    # Step 1 — Initialize upload (inbox/draft endpoint)
+    # Step 1 — Initialize upload
     init_resp = requests.post(
-        f"{TIKTOK_API}/post/publish/inbox/video/init/",
+        f"{TIKTOK_API}/post/publish/video/init/",
         headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type":  "application/json; charset=UTF-8",
@@ -69,7 +70,7 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
         timeout=30,
     )
 
-    log.info(f"TikTok init status: {init_resp.status_code} — {init_resp.text[:300]}")
+    log.info(f"TikTok init status: {init_resp.status_code}")
 
     if init_resp.status_code != 200:
         log.error(f"TikTok init failed: {init_resp.status_code}")
@@ -84,7 +85,7 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
         log.error(f"No upload_url: {resp_data}")
         return None
 
-    log.info(f"TikTok upload URL received, publish_id={publish_id}")
+    log.info(f"TikTok upload URL received")
 
     # Step 2 — Upload video file
     with open(video_path, "rb") as f:
@@ -104,8 +105,59 @@ def upload_to_tiktok(video_path: str, title: str) -> str:
     log.info(f"TikTok upload response: {upload_resp.status_code}")
 
     if upload_resp.status_code not in (200, 201, 206):
-        log.error(f"TikTok upload failed: {upload_resp.status_code} {upload_resp.text[:200]}")
+        log.error(f"TikTok upload failed: {upload_resp.status_code}")
         return None
 
-    log.info(f"✅ TikTok upload complete! Video sent to inbox. publish_id={publish_id}")
-    return publish_id
+    log.info("✅ Video uploaded to TikTok")
+
+    # Step 3 — Auto-publish with caption
+    caption = _build_tiktok_caption(title, description)
+    publish_resp = requests.post(
+        f"{TIKTOK_API}/post/publish/video/publish/",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type":  "application/json; charset=UTF-8",
+        },
+        json={
+            "source_info": {
+                "source":     "FILE_UPLOAD",
+                "video_size": file_size,
+            },
+            "post_info": {
+                "desc":            caption,
+                "disable_comment": False,
+                "disable_duet":    False,
+                "disable_stitch":  False,
+            },
+            "privacy_level": "PUBLIC_TO_EVERYONE",
+        },
+        timeout=30,
+    )
+
+    log.info(f"TikTok publish response: {publish_resp.status_code}")
+
+    if publish_resp.status_code == 200:
+        pub_data = publish_resp.json().get("data", {})
+        video_id = pub_data.get("video_id", publish_id)
+        log.info(f"✅ TikTok AUTO-PUBLISHED! video_id={video_id}")
+        return video_id
+    else:
+        log.warning(f"Auto-publish failed ({publish_resp.status_code}), video in inbox")
+        log.info(f"Response: {publish_resp.text[:300]}")
+        return publish_id
+
+
+def _build_tiktok_caption(title: str, description: str) -> str:
+    """Build engaging TikTok caption with hashtags."""
+    caption = title.strip()
+    
+    if description:
+        lines = description.split('\n')
+        preview = lines[0][:80]
+        caption = f"{title}\n\n{preview}"
+    
+    # Add finance hashtags
+    hashtags = " #Shorts #Finance #Money #WealthTips #FinancialFreedom #Investing #TheFinancialHero #PersonalFinance"
+    caption = (caption + hashtags)[:2200]  # TikTok caption limit
+    
+    return caption
