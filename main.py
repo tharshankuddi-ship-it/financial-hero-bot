@@ -1,110 +1,155 @@
+"""
+src/tiktok_uploader.py — Upload & auto-publish videos to TikTok
+Uses correct /post/publish/action/publish/ endpoint
+"""
 import os
-import sys
-import tempfile
 import logging
-import subprocess
-from pathlib import Path
+import requests
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
-
-from scripter import generate_script, pick_topic
-from narrator import generate_audio
-from editor import render_video
-from uploader import upload_video
-from tiktok_uploader import upload_to_tiktok
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
 log = logging.getLogger(__name__)
-FONT_PATH = Path("fonts/main.ttf")
+TIKTOK_API = "https://open.tiktokapis.com/v2"
 
 
-def quality_check(video_path: str, min_duration=40, max_duration=65) -> bool:
+def _get_valid_token() -> str:
+    access_token  = os.getenv("TIKTOK_ACCESS_TOKEN")
+    refresh_token = os.getenv("TIKTOK_REFRESH_TOKEN")
+    client_key    = os.getenv("TIKTOK_CLIENT_KEY", "sbawgs3smrwhcdgcu8")
+    client_secret = os.getenv("TIKTOK_CLIENT_SECRET", "RanP8eBukOuvSVyQrgGJxQL9pTpzvFwv")
+
+    if not access_token:
+        return None
+
     try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-show_entries",
-             "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_path],
-            capture_output=True, text=True
+        resp = requests.post(
+            f"{TIKTOK_API}/oauth/token/",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "client_key":    client_key,
+                "client_secret": client_secret,
+                "grant_type":    "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            timeout=15,
         )
-        duration = float(result.stdout.strip())
-        size_mb  = os.path.getsize(video_path) / 1024 / 1024
-        log.info(f"QC → Duration: {duration:.1f}s | Size: {size_mb:.1f}MB")
-        if duration < min_duration:
-            log.error(f"QC FAILED: too short ({duration:.1f}s < {min_duration}s)")
-            return False
-        if duration > max_duration:
-            log.error(f"QC FAILED: too long ({duration:.1f}s > {max_duration}s)")
-            return False
-        if size_mb < 0.5:
-            log.error(f"QC FAILED: file too small ({size_mb:.1f}MB)")
-            return False
-        log.info("QC PASSED ✅")
-        return True
+        data = resp.json()
+        if "access_token" in data:
+            log.info("TikTok token refreshed ✅")
+            return data["access_token"]
     except Exception as e:
-        log.warning(f"QC check failed ({e}) — uploading anyway")
-        return True
+        log.warning(f"Token refresh failed ({e}), using existing token")
+
+    return access_token
 
 
-def run():
-    topic = pick_topic()
-    log.info(f"Topic: {topic}")
+def upload_to_tiktok(video_path: str, title: str, description: str = "") -> str:
+    access_token = _get_valid_token()
+    if not access_token:
+        log.warning("TIKTOK_ACCESS_TOKEN not set — skipping TikTok upload")
+        return None
 
-    with tempfile.TemporaryDirectory() as tmp:
-        audio_path = os.path.join(tmp, "audio.mp3")
-        video_path = os.path.join(tmp, "short.mp4")
+    file_size = os.path.getsize(video_path)
+    log.info(f"Uploading to TikTok: {title[:50]} ({file_size/1024/1024:.1f}MB)")
 
-        log.info("Generating script...")
-        script = generate_script(topic)
-        log.info(f"Script ({len(script.split())} words): {script[:80]}...")
+    # Step 1 — Initialize upload
+    init_resp = requests.post(
+        f"{TIKTOK_API}/post/publish/video/init/",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type":  "application/json; charset=UTF-8",
+        },
+        json={
+            "source_info": {
+                "source":            "FILE_UPLOAD",
+                "video_size":        file_size,
+                "chunk_size":        file_size,
+                "total_chunk_count": 1,
+            },
+        },
+        timeout=30,
+    )
 
-        log.info("Generating audio...")
-        timestamps = generate_audio(script, audio_path)
+    log.info(f"TikTok init: {init_resp.status_code}")
 
-        log.info("Rendering video...")
-        render_video(
-            script=script,
-            audio_path=audio_path,
-            output_path=video_path,
-            font_path=str(FONT_PATH),
-            word_timestamps=timestamps,
-        )
+    if init_resp.status_code != 200:
+        log.error(f"TikTok init failed: {init_resp.status_code}")
+        return None
 
-        if not quality_check(video_path):
-            log.error("Video failed quality check — NOT uploading")
-            sys.exit(1)
+    resp_data  = init_resp.json()
+    data       = resp_data.get("data", {})
+    upload_url = data.get("upload_url")
+    publish_id = data.get("publish_id")
 
-        sentences    = script.split('. ')
-        desc_preview = '. '.join(sentences[:2]) + '.'
-        title        = f"{topic.title()} #Shorts #TheFinancialHero"
-        description  = (
-            f"{desc_preview}\n\n"
-            "Follow The Financial Hero for daily money tips.\n\n"
-            "#Shorts #Finance #Money #WealthTips "
-            "#FinancialFreedom #Investing #TheFinancialHero #PersonalFinance"
-        )
+    if not upload_url:
+        log.error(f"No upload_url: {resp_data}")
+        return None
 
-        # Upload to YouTube
-        log.info("Uploading to YouTube...")
-        try:
-            upload_video(video_path, title=title, description=description)
-            log.info("✅ YouTube upload done!")
-        except Exception as e:
-            log.error(f"YouTube upload failed: {e}")
+    log.info(f"TikTok URL received, publish_id={publish_id}")
 
-        # Upload to TikTok
-        log.info("Uploading to TikTok...")
-        try:
-            tiktok_id = upload_to_tiktok(video_path, title=title, description=description)
-            if tiktok_id:
-                log.info(f"✅ TikTok done! video_id={tiktok_id}")
-        except Exception as e:
-            log.error(f"TikTok upload failed: {e}")
+    # Step 2 — Upload video file
+    with open(video_path, "rb") as f:
+        video_data = f.read()
 
-    log.info("Done! ✅")
+    upload_resp = requests.put(
+        upload_url,
+        headers={
+            "Content-Type":   "video/mp4",
+            "Content-Range":  f"bytes 0-{file_size-1}/{file_size}",
+            "Content-Length": str(file_size),
+        },
+        data=video_data,
+        timeout=120,
+    )
+
+    log.info(f"TikTok file upload: {upload_resp.status_code}")
+
+    if upload_resp.status_code not in (200, 201, 206):
+        log.error(f"TikTok upload failed: {upload_resp.status_code}")
+        return None
+
+    # Step 3 — Auto-publish with caption
+    caption = _build_tiktok_caption(title, description)
+    publish_resp = requests.post(
+        f"{TIKTOK_API}/post/publish/action/publish/",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type":  "application/json; charset=UTF-8",
+        },
+        json={
+            "publish_id": publish_id,
+            "post_info": {
+                "desc":            caption,
+                "disable_comment": False,
+                "disable_duet":    False,
+                "disable_stitch":  False,
+            },
+            "privacy_level": "PUBLIC_TO_EVERYONE",
+        },
+        timeout=30,
+    )
+
+    log.info(f"TikTok publish: {publish_resp.status_code}")
+
+    if publish_resp.status_code == 200:
+        pub_data = publish_resp.json().get("data", {})
+        video_id = pub_data.get("video_id", publish_id)
+        log.info(f"✅ TikTok AUTO-PUBLISHED! video_id={video_id}")
+        return video_id
+    else:
+        log.warning(f"Auto-publish failed ({publish_resp.status_code})")
+        log.info(f"Endpoint: {TIKTOK_API}/post/publish/action/publish/")
+        log.info(f"Response: {publish_resp.text[:200]}")
+        return publish_id
 
 
-if __name__ == "__main__":
-    run()
+def _build_tiktok_caption(title: str, description: str) -> str:
+    caption = title.strip()
+    
+    if description:
+        lines = description.split('\n')
+        preview = lines[0][:80]
+        caption = f"{title}\n\n{preview}"
+    
+    hashtags = " #Shorts #Finance #Money #WealthTips #FinancialFreedom #Investing #TheFinancialHero #PersonalFinance"
+    caption = (caption + hashtags)[:2200]
+    
+    return caption
