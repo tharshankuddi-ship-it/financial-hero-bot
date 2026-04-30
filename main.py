@@ -97,9 +97,9 @@ def run():
         # Upload to TikTok
         log.info("Uploading to TikTok...")
         try:
-            tiktok_id = upload_to_tiktok(video_path, title=title)
+            tiktok_id = upload_to_tiktok(video_path, title=title, description=description)
             if tiktok_id:
-                log.info(f"✅ TikTok upload done! publish_id={tiktok_id}")
+                log.info(f"✅ TikTok done! video_id={tiktok_id}")
         except Exception as e:
             log.error(f"TikTok upload failed: {e}")
 
